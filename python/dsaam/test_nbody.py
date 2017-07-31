@@ -157,12 +157,11 @@ class DrawerNode(OneThreadNode):
         self.systemdrawer.system.updateState(idx, state)
 
         newTime = self.time
-        while tmin_next >= newTime + dt:
-            print("redrawing old-->new : {}-->{}".format(newTime, newTime+dt))
-            newTime = newTime + dt
+        while tmin_next >= newTime + self.dt:
+            newTime = newTime + self.dt
 
         if newTime > self.time:
-            print("[{}] [{}] redrawing picture (dt={})".format(newTime, self.name, self.dt))
+            print("[{}] [{}] redrawing picture".format(newTime, self.name))
             self.systemdrawer.draw()
 
         return newTime
