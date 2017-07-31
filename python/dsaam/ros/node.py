@@ -106,3 +106,8 @@ class RosNode(Node):
                Time(dt.secs, dt.nsecs))
         return __cb
         
+
+class OneThreadNode(RosNode):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+        

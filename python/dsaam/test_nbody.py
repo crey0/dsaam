@@ -128,15 +128,20 @@ class SystemOneNode(OneThreadNode):
         state, time, dt = m
         if idx is not None:
             self.systemone.updateState(idx, state)
-            
-        while tmin_next >= self.time + self.dt:
+
+        newTime = self.time
+        while tmin_next >= newTime + self.dt:
             print("[{}] [{}] Computing next step".format(self.time, self.name))
             dt_secf = float(self.dt.sec) + float(self.dt.nanos)*1e-9
             self.systemone.integrateOne(dt_secf)
-            newTime = self.time + self.dt
             stateOne = self.systemone.oneState()
             name = self.systemone.theone
+            newTime = newTime + self.dt
             self.send(name, stateOne, newTime)
+            
+        return newTime
+        
+            
 
 class DrawerNode(OneThreadNode):
     def __init__(self, systemdrawer, *args, **kwargs):
@@ -150,12 +155,17 @@ class DrawerNode(OneThreadNode):
         idx = name
         state, time, dt = m
         self.systemdrawer.system.updateState(idx, state)
-            
-        while tmin_next > self.time + self.dt:
-            print("[{}] [{}] redrawing picture".format(self.time, self.name))
+
+        newTime = self.time
+        while tmin_next >= newTime + dt:
+            print("redrawing old-->new : {}-->{}".format(newTime, newTime+dt))
+            newTime = newTime + dt
+
+        if newTime > self.time:
+            print("[{}] [{}] redrawing picture (dt={})".format(newTime, self.name, self.dt))
             self.systemdrawer.draw()
-            self.step(self.time+self.dt)
-            #sleep(0.025)
+
+        return newTime
 
 def test_nbody():
     global stop_event
@@ -249,7 +259,7 @@ def test_nbody():
                if name in effectors[sb.color] and sb.name != name]
         sinks.append(Sink('drawer', callback=None))
         outflows = [OutFlow(name, dt, sinks)]
-        node = SystemOneNode(s, name, time, dt, inflows, outflows, max_qsize)
+        node = SystemOneNode(s, Node(name, time, dt, inflows, outflows, max_qsize))
         return node
 
     time = Time(0)
@@ -258,10 +268,11 @@ def test_nbody():
     system_one_nodes = {s.theone: build_systemone_node(s, time, dt_colors[c], max_qsize)
                             for c in colors for s in system_ones[c].values()}
 
-    system_drawer_node = DrawerNode(system_drawer, 'drawer', time, dt_draw,
-                                    [InFlow(ni, dt_colors[b.color], time_callback=None) for ni, b in all_bodies.items()],
-                                    [], #OutFlows
-                                    max_qsize)
+    system_drawer_node = DrawerNode(system_drawer,
+                                    Node('drawer', time, dt_draw,
+                                         [InFlow(ni, dt_colors[b.color], time_callback=None) for ni, b in all_bodies.items()],
+                                         [], #OutFlows
+                                         max_qsize))
 
     def get_node(name):
         if name == 'drawer':
@@ -273,14 +284,14 @@ def test_nbody():
     #update all callbacks
     all_nodes = list(system_one_nodes.values())+[system_drawer_node]
     for node in all_nodes:
-        for flow in node.inflows.flows:
+        for flow in node.node.inflows.flows:
             fnode = get_node(flow.name)
-            flow.time_callback = fnode.time_callback(flow.name, node.name)
+            flow.time_callback = fnode.node.time_callback(flow.name, node.name)
             print("Time-link {} --> {}".format(node.name, fnode.name))
-        for flow in node.outflows.values():
+        for flow in node.node.outflows.values():
             for sink in flow.sinks:
                 fnode = get_node(sink.name)
-                sink.callback = fnode.push_callback(node.name)
+                sink.callback = fnode.node.push_callback(node.name)
                 print("Messa-link {} --> {}".format(node.name, fnode.name))
 
 

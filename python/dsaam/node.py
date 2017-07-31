@@ -272,7 +272,6 @@ class Node:
                                  .format(self.time, self.name, time, self.inflows.nextTime()))
         print("[{}] [{}] OUT message on  {}".format(time, self.name, flow))
         self.outflows[flow].send(m, time)
-        self.time = copy(time)
 
     def send_callback(self, flow):
         return lambda m, time: self.send(flow, m, time)        
@@ -281,9 +280,12 @@ class Node:
         assert(time >= self.time)
         self.time = copy(time)
     
-class OneThreadNode(Node):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args)
+class OneThreadNode():
+    def __init__(self, node, *args, **kwargs):
+        self.node = node
+        self.send = self.node.send
+        self.send_callback = self.node.send_callback
+        
         self.stop_event = Event()
         self.worker = Thread(name=self.name, target=self, daemon=True)
         if "callback" in kwargs:
@@ -292,6 +294,19 @@ class OneThreadNode(Node):
         if "init" in kwargs:
             init = kwargs["init"]
             self.init = init
+        
+
+    @property
+    def name(self):
+        return self.node.name
+
+    @property
+    def dt(self):
+        return self.node.dt
+
+    @property
+    def time(self):
+        return self.node.time
 
     def start(self):
         self.worker.start()
@@ -308,13 +323,14 @@ class OneThreadNode(Node):
     def __call__(self):
         self.init()
         while not self.stop_event.is_set():
-            v = self.next()
-            self.process(*v)
-
+            v = self.node.next()
+            t = self.process(*v)
+            if t is not None:
+                self.node.step(t)
             
 
     def init(self):
         raise NotImplementedError("Please implement process method in your subclass")
     
-    def process(self, name, m , tmin_next):
+    def process(self, name, m, tmin_next):
         raise NotImplementedError("Please implement process method in your subclass")
