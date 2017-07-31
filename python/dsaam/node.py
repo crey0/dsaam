@@ -220,7 +220,8 @@ class OutMessageFlow:
             #assert(self.min_time + self.dt * self.max_qsize >= time)
             self.time = time
             for s in self.sinks:
-                s.callback(m, time)
+                if s.callback is not None:
+                    s.callback(m, time)
 
 class Node:
     def __init__(self, name, time, dt, inflows, outflows, max_qsize):
