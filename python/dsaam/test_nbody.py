@@ -2,12 +2,27 @@ from .node import Node, Time, InFlow, OutFlow, Sink, OneThreadNode
 import numpy as np
 from copy import deepcopy
 from threading import Event
+from queue import Queue
+import matplotlib
 import matplotlib.pyplot as plt
 import signal, os
 from time import sleep
 from time import time as systime
 
 stop_event = Event()
+except_event = Event()
+excepts = Queue() 
+
+def exception_collect(fun):
+    def _fun(*args, **kwargs):
+        try:
+            fun(*args, **kwargs)
+        except BaseException as e:
+            excepts.put(e)
+            except_event.set()
+            stop_event.set()
+            raise e
+    return _fun
 
 def handler_sigint(signum, frame):
     print("[master] Caught SIGINT : setting stop event.")
@@ -74,11 +89,11 @@ class SystemOne(System):
         self.bodies[self.theone].integrate(p_others, self.m_others, dt)
 
 class SystemDrawer:
-    def __init__(self, system, size, scale):
+    def __init__(self, system, size, scale, headless=False):
         self.system = system
         self.size = size
         self.scale = scale
-        
+        self.headless = headless
         self.figure = None
         self.scatter = None
         self.bodies = {c: [b for b in self.system.bodies.values() if b.color==c]
@@ -91,6 +106,9 @@ class SystemDrawer:
 
     def init(self):
         global colors
+        if self.headless:
+            matplotlib.use('Agg')
+            plt.ioff()
         self.figure = plt.figure(figsize=self.size)
         self.axes = self.figure.add_axes([0, 0, 1, 1],frameon=True)
         pos, size = self.scatter_data()
@@ -99,8 +117,9 @@ class SystemDrawer:
         self.axes.set_ylim(0,1)
         #self.axes.grid(True)
         self.axes.set_aspect('equal')
-        plt.ion()
-        plt.show(block=False)
+        if not self.headless:
+            plt.ion()
+            plt.show(block=False)
 
         
     def draw(self):
@@ -111,24 +130,25 @@ class SystemDrawer:
             s.set_sizes(size[c])
             s.set_offsets(pos[c])
         self.figure.canvas.draw()
- 
-
+   
 class SystemOneNode(OneThreadNode):
     def __init__(self, systemone, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.systemone = deepcopy(systemone)
 
+    @exception_collect
     def init(self):
         stateOne = self.systemone.oneState()
         name = self.systemone.theone
         self.send(name, stateOne, self.time)
-        
+
+    @exception_collect
     def process(self, name, m, tmin_next):
         idx = name
         state, time, dt = m
         if idx is not None:
             self.systemone.updateState(idx, state)
-
+        
         newTime = self.time
         while tmin_next >= newTime + self.dt:
             print("[{}] [{}] Computing next step".format(self.time, self.name))
@@ -148,9 +168,11 @@ class DrawerNode(OneThreadNode):
         super().__init__(*args, **kwargs)
         self.systemdrawer = deepcopy(systemdrawer)
 
+    @exception_collect
     def init(self):
         self.systemdrawer.init()
-    
+
+    @exception_collect
     def process(self, name, m, tmin_next):
         idx = name
         state, time, dt = m
@@ -166,7 +188,7 @@ class DrawerNode(OneThreadNode):
 
         return newTime
 
-def test_nbody():
+def test_nbody(auto=True):
     global stop_event
     colors = ['red', 'green', 'blue', 'yellow']
     #nred, ngreen, nblue, nyellow = 1, 7, 11, 1
@@ -291,7 +313,7 @@ def test_nbody():
             for sink in flow.sinks:
                 fnode = get_node(sink.name)
                 sink.callback = fnode.node.push_callback(node.name)
-                print("Messa-link {} --> {}".format(node.name, fnode.name))
+                print("Mess-link {} --> {}".format(node.name, fnode.name))
 
 
     signal.signal(signal.SIGINT, handler_sigint)
@@ -302,10 +324,16 @@ def test_nbody():
         node.start()
     system_drawer_node.start()
 
-    #wait on stop signal
-    stop_event.wait()
-
+    #wait on stop signal or simulate 10 seconds if auto is set
+    if not auto:
+        stop_event.wait()
+    else:
+        while system_drawer_node.time < Time(10)\
+              and not except_event.is_set()\
+              and not stop_event.is_set():
+            sleep(0.1)
     print("[master] Stopping threads.")
+    
     #stop all threads
     for node in system_one_nodes.values():
         print("[master] Stopping node {}".format(node.name))
@@ -321,7 +349,14 @@ def test_nbody():
         node.join(0.001)
         if node.isAlive():
             remaining.append(node)
-    system_drawer_node.join(1)
-    
+    system_drawer_node.join(0.1)
+
+    if(except_event.is_set()):
+        print("[master] Failure: {} exception(s) collected".format(excepts.qsize()))
+    else:
+        print("[master] Done")
+
+    assert(not except_event.is_set())
+              
 if __name__ == "__main__":
-    test_nbody()
+    test_nbody(auto=False)
