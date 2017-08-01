@@ -6,22 +6,6 @@ from copy import copy
 from collections import Sequence
 
 NS_IN_SECOND = 1000000000
-
-class HeapQ():
-    def __init__(self):
-        self.heap = []
-
-    def push(self):
-        heappush(self.heap)
-        return self.__len__()
-
-    def pop(self):
-        heappop(self.heap)
-        return self.__len__()
-
-    def __len__(self):
-        return len(self.heap)
-
     
 class Time:
     def __init__(self, sec=0, nanos=0):
@@ -229,8 +213,8 @@ class Node:
         outflows: list of OutFlow tuple each containing name, dt, list of sinks
         """
         super().__init__()
-        assert type(time) is Time, "Expected Time type for parameter time, got {}".format(type(time))
-        assert type(dt) is Time, "Expected Time type for parameter dt, got {}".format(type(dt))
+        assert type(time) is Time, "Expected type Time  for parameter time, got {}".format(type(time))
+        assert type(dt) is Time, "Expected type Time  for parameter dt, got {}".format(type(dt))
         self.name = name
         self.time = copy(time)
         self.dt = copy(dt)
@@ -244,7 +228,7 @@ class Node:
         self.indexes = dict([(f.name, idx) for idx, f in enumerate(inflows)])
 
     def push(self, flow, m, time):
-        print("[{}] [{}] pushing IN on flow {}".format(self.time, self.name, flow, self.indexes))
+        #print("[{}] [{}] pushing IN on flow {}".format(self.time, self.name, flow, self.indexes))
         fidx = self.indexes[flow]
         self.inflows.push(fidx, m, time)
 
@@ -269,14 +253,17 @@ class Node:
             "Time contract breached: attempt to send outgoing message at {} but expecting "\
             "next incoming message at {}".format(time, self.inflows.nextTime())
 
-        print("[{}] [{}] OUT message on  {}".format(time, self.name, flow))
+        print("[{}] [{}] OUT message on  {} at {}".format(self.time, self.name, flow, time))
         self.outflows[flow].send(m, time)
 
     def send_callback(self, flow):
         return lambda m, time: self.send(flow, m, time)        
 
     def step(self, time):
-        assert(time >= self.time)
+        assert time >= self.time,\
+            "Time contract breached: cannot step into the past, time was {} trying"\
+            "to step at {}".format(self.time, time)
+#        print("[{}] [{}] Stepping to {}".format(self.time, self.name, time))
         self.time = copy(time)
     
 class OneThreadNode():
