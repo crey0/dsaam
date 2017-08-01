@@ -177,14 +177,12 @@ class MessageFlowMultiplexer:
             elif nt < tmin_next:
                 tmin_next = nt
 
-        if idx < 0 or idx >= len(self.queues):
-            print("ERROOOR Bad index {} len={}".format(idx,len(self.queues) ))
-            return "None", None, None
         q = self.queues[idx]
         m = q.pop()
-        if self.flows[idx].time_callback is None:
-            print("[{}] ERROOOR NO callback for flow {}".format(self.time, self.flows[idx].name))
-            return q.name, None, None
+        
+        assert self.flows[idx].time_callback is not None,\
+            "No time-callback for flow {}".format(self.time, self.flows[idx].name)
+
         self.flows[idx].time_callback(m[1])
         self.tmin_next = tmin_next
         return q.name, m, tmin_next
@@ -199,25 +197,26 @@ class OutMessageFlow:
         self.dt = copy(dt)
         self.sinks = sinks
         self.sink_times = dict([(s.name, [time-dt, Semaphore(max_qsize)]) for s in sinks])
-        #self.min_time = copy(time)
         self.lock = Lock()
         self.max_qsize = max_qsize
 
     def push_time(self, name, time):
         with self.lock:
             t, s = self.sink_times[name]
-            assert(t < time)
+            assert t < time, "Time contract breached: time callback indicates messages are not "\
+                "processed in order: was {}, update in the past at {}".format(t, time)
+
             self.sink_times[name][0] = copy(time)
-            #if time < self.min_time:
-            #    self.min_time = copy(time)
             s.release()
                 
     def send(self, m, time):
         for _, s in self.sink_times.values():
             s.acquire()
         with self.lock:
-            assert(self.time + self.dt <= time)
-            #assert(self.min_time + self.dt * self.max_qsize >= time)
+            assert self.time + self.dt == time,\
+                "Time contract breached for next message, should be at {} but is at {}"\
+                .format(self.time + self.dt, time)
+
             self.time = time
             for s in self.sinks:
                 if s.callback is not None:
@@ -230,8 +229,8 @@ class Node:
         outflows: list of OutFlow tuple each containing name, dt, list of sinks
         """
         super().__init__()
-        assert(type(time) is Time)
-        assert(type(dt) is Time)
+        assert type(time) is Time, "Expected Time type for parameter time, got {}".format(type(time))
+        assert type(dt) is Time, "Expected Time type for parameter dt, got {}".format(type(dt))
         self.name = name
         self.time = copy(time)
         self.dt = copy(dt)
@@ -257,19 +256,19 @@ class Node:
     
     def next(self):
         name, m, tmin_next = self.inflows.pop()
-        if m is None:
-            print("[{}] [{}] ERROOOR happened in node".format(self.time, self.name))
-            exit(0)
         print("[{}] [{}] IN message from {} (at {}, next at {})"
               .format(self.time, self.name, name, m[1], tmin_next))
         return name, m, tmin_next
         
 
     def send(self, flow, m, time):
-        assert(time >= self.time)
-        if self.inflows.nextTime() < time:
-            raise AssertionError("[{}] [{}] Attempt to send at {} but next is at {}"
-                                 .format(self.time, self.name, time, self.inflows.nextTime()))
+        assert time >= self.time,\
+            "Time contract breached: sending in the past is forbiden, message at {},"\
+            " self time is {}".format(time, self.time)
+        assert self.inflows.nextTime() >= time,\
+            "Time contract breached: attempt to send outgoing message at {} but expecting "\
+            "next incoming message at {}".format(time, self.inflows.nextTime())
+
         print("[{}] [{}] OUT message on  {}".format(time, self.name, flow))
         self.outflows[flow].send(m, time)
 
