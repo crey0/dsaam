@@ -16,7 +16,7 @@ excepts = Queue()
 def exception_collect(fun):
     def _fun(*args, **kwargs):
         try:
-            fun(*args, **kwargs)
+            return fun(*args, **kwargs)
         except BaseException as e:
             excepts.put(e)
             except_event.set()
@@ -107,9 +107,13 @@ class SystemDrawer:
     def init(self):
         global colors
         if self.headless:
-            matplotlib.use('Agg')
             plt.ioff()
-        self.figure = plt.figure(figsize=self.size)
+            from matplotlib.figure import Figure
+            from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+            self.figure = Figure()
+            canvas  = FigureCanvas(self.figure)
+        else:
+            self.figure = plt.figure(figsize=self.size)
         self.axes = self.figure.add_axes([0, 0, 1, 1],frameon=True)
         pos, size = self.scatter_data()
         self.scatter = [self.axes.scatter(pos[c][:, 0], pos[c][:, 1], size[c], color=color) for c, color in enumerate(colors)]
@@ -117,6 +121,7 @@ class SystemDrawer:
         self.axes.set_ylim(0,1)
         #self.axes.grid(True)
         self.axes.set_aspect('equal')
+
         if not self.headless:
             plt.ion()
             plt.show(block=False)
@@ -151,14 +156,17 @@ class SystemOneNode(OneThreadNode):
         
         newTime = self.time
         while tmin_next >= newTime + self.dt:
-            print("[{}] [{}] Computing next step".format(self.time, self.name))
+            print("[{}] [{}] Computing next step {} -- > {}"\
+                  .format(self.time, self.name, newTime, newTime+self.dt))
             dt_secf = float(self.dt.sec) + float(self.dt.nanos)*1e-9
             self.systemone.integrateOne(dt_secf)
             stateOne = self.systemone.oneState()
             name = self.systemone.theone
             newTime = newTime + self.dt
             self.send(name, stateOne, newTime)
-            
+
+        if newTime > self.time:
+            print("[{}] [{}] Stepping at {}".format(self.time, self.name, newTime))
         return newTime
         
             
@@ -192,7 +200,7 @@ def test_nbody(auto=True):
     global stop_event
     colors = ['red', 'green', 'blue', 'yellow']
     #nred, ngreen, nblue, nyellow = 1, 7, 11, 1
-    nred, ngreen, nblue, nyellow = 1, 5, 5, 0
+    nred, ngreen, nblue, nyellow = 1, 2, 3, 5
     #idx = {'red': range(0, nred),
     #       'green':range(nred, nred+ngreen),
     #       'blue': range(nred+ngreen ,nred+ngreen+nblue),
@@ -265,7 +273,7 @@ def test_nbody(auto=True):
     all_bodies = {}
     for b in bodies.values():
         all_bodies.update(b)    
-    system_drawer = SystemDrawer(System(all_bodies), (10, 10), 1)
+    system_drawer = SystemDrawer(System(all_bodies), (10, 10), 1, auto)
 
     dt_colors = {'red':Time(0,int(1e8)), 'green':Time(0,int(1e8)), 'blue':Time(0,int(1e8)), 'yellow':Time(0,int(1e8))}
     dt_draw = Time(1, int(1e8))
@@ -329,7 +337,6 @@ def test_nbody(auto=True):
         stop_event.wait()
     else:
         while system_drawer_node.time < Time(10)\
-              and not except_event.is_set()\
               and not stop_event.is_set():
             sleep(0.1)
     print("[master] Stopping threads.")
