@@ -84,9 +84,10 @@ def create_launch_file(path, autotest=False):
     colors = ['red', 'green', 'blue', 'yellow']
     n = {
         'red': 1,
-        'green': 2,
-        'blue': 3,
-        'yellow':5,
+        'green': 1,
+        'blue': 1,
+        'yellow':1,
+        'drawer':1,
     }
     positions = {c: np.random.random((n[c], 2)) for c in colors}
     positions['red'][0] = [0.5, 0.5]
@@ -127,13 +128,15 @@ def create_launch_file(path, autotest=False):
         'green': ['red', 'green'],
         'blue': ['green', 'blue'],
         'yellow': ['red', 'green', 'blue'],
-        'drawer': ['red, green','blue', 'yellow']}
+        'drawer': ['red', 'green', 'blue', 'yellow']}
         
     idx = {
         'red': ['red_{}'.format(i) for i in range(n['red'])],
         'green':['green_{}'.format(i) for i in range(n['green'])],
         'blue': ['blue_{}'.format(i) for i in range(n['blue'])],
-        'yellow':['yellow_{}'.format(i) for i in range(n['yellow'])]}
+        'yellow': ['yellow_{}'.format(i) for i in range(n['yellow'])],
+        'drawer': ['drawer_{}'.format(i) for i in range(n['drawer'])],
+        }
     # END PARAMS
 
     runfile = path + "/run_node.sh"
@@ -157,7 +160,7 @@ def create_launch_file(path, autotest=False):
                 'name': i,
                 'message_class': "geometry_msgs.msg.PointStamped",
                 'dt': dt[c].to_nanos(),
-                'sinks': [j for color in colors for j in idx[color] if c in effectors[color]],
+                'sinks': [j for color in idx for j in idx[color] if c in effectors[color]],
             }]
             inflows = [{
                 'name': j,
@@ -165,6 +168,7 @@ def create_launch_file(path, autotest=False):
                 'dt': dt[color].to_nanos(),
                 } for color in effectors[c] for j in idx[color]]
             node_params= {
+                'name': i,
                 'max_qsize': max_qsize,
                 'start_time': start_time.to_nanos(),
                 'dt': dt[c].to_nanos(),
@@ -175,6 +179,29 @@ def create_launch_file(path, autotest=False):
             yamlp = conf_path + "{}.yaml".format(i)
             create_yaml(yamlp, node_params)
             launch.node(i, i, "run_ros_node.sh", yamlp, "dsaam", runfile)
+
+    
+    c = 'drawer'
+    i = 'drawer_0'
+    outflows = []
+    inflows = [{
+        'name': j,
+        'message_class': "geometry_msgs.msg.PointStamped",
+        'dt': dt[color].to_nanos(),
+    } for color in effectors[c] for j in idx[color]]
+    node_params= {
+        'name': i,
+        'max_qsize': max_qsize,
+        'start_time': start_time.to_nanos(),
+        'dt': dt[c].to_nanos(),
+        'outflows': outflows,
+        'inflows': inflows,
+        'size': draw_size,
+        'scale': draw_scale,
+    }
+    yamlp = conf_path + "{}.yaml".format(i)
+    create_yaml(yamlp, node_params)
+    launch.node(i, i, "run_ros_node.sh", yamlp, "dsaam", runfile)
     launch.write(conf_path + "test_nbody.launch")
 
     # Set ros package path to add the dsaam python root folder 

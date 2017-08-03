@@ -29,7 +29,7 @@ def shutdown_hook():
     stop_event.set()
 
 def make_ros_nbody_node():
-    name = rospy.get_name()
+    name = rospy.get_param("name")
     print('[{}] Building node'.format(name))
     autotest = rospy.get_param('/autotest')
 
@@ -56,7 +56,6 @@ def make_ros_nbody_node():
         bodies[name] = Body(name,
                             position, speed, mass, radius, color)
         s_one = SystemOne(name, bodies)
-        ros_node = RosNode(name)
         node = rosbridge(SystemOneNode(s_one, ros_node))
 
     return node
@@ -66,7 +65,7 @@ def make_ros_nbody_node():
 if __name__== '__main__':
     rospy.on_shutdown(shutdown_hook)
     node = make_ros_nbody_node()
-    print('Starting node')
+    print('[{}] Starting node'.format(node.name))
     node.start()
     stop_event.wait()
     if not rospy.is_shutdown():

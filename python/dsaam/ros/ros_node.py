@@ -15,17 +15,18 @@ def get_class(name_string):
 
 class CountSubListener(SubscribeListener):
     def __init__(self, num_peers):
-        self.semaphore = Semaphore()
+        self.semaphore = Semaphore(0)
         self.num_peers = num_peers
      	
     def peer_subscribe(self, topic_name, topic_publish, peer_publish):
-        pass
+        print("Peer subscribed to {} (n={})".format(topic_name, self.num_peers))
+        self.semaphore.release()
 
     def peer_unsubscribe(self, topic_name, num_peers):
         raise RuntimeError("No unsubscription allowed for topic {}".format(topic_name))
 
     def wait(self):
-        for _ in self.num_peers:
+        for _ in range(self.num_peers):
             self.semaphore.acquire()
 
 class RosNode(Node):
@@ -48,7 +49,7 @@ class RosNode(Node):
             subl = CountSubListener(num_peers=len(o['sinks']))
             sublisteners.append(subl)
             self.publishers[o['name']] = \
-                rospy.Publisher(o['name'], m_class, subscriber_listener=subl, queue_size=max_qsize)
+                rospy.Publisher('/'+o['name'], m_class, subscriber_listener=subl, queue_size=max_qsize)
             sink_names = o['sinks']
             sinks = []
             for s in sink_names:
@@ -63,7 +64,7 @@ class RosNode(Node):
         for i in p_in:
             m_class = get_class(i['message_class'])
             self.subscribers[i['name']] = \
-                rospy.Subscriber(i['name'], m_class, callback=self.ros_push_callback(i['name']))
+                rospy.Subscriber('/'+i['name'], m_class, callback=self.ros_push_callback(i['name']))
             
             ifs.append(InFlow(name=i['name'], dt=Time(nanos=i['dt']),
                               time_callback=self.ros_time_callback(i['name'], name, max_qsize)))
