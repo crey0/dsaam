@@ -38,10 +38,13 @@ class RosNode(Node):
         dt = Time(nanos=rospy.get_param('dt'))
 
         # TODO: setup management service
+
+        # ROS pubs and subs dicts
+        self.publishers = {}
+        self.subscribers = {}
         
         # setup outflows
-        p_out = rospy.get_param("outflows")
-        self.publishers = {}
+        p_out = rospy.get_param("outflows")      
         sublisteners = []
         ofs = []
         for o in p_out:
@@ -54,12 +57,14 @@ class RosNode(Node):
             sinks = []
             for s in sink_names:
                 sinks.append(Sink(name=s, callback=None))
+                subname = "/" + name + "/time/" + s
+                self.subscribers[subname] =\
+                    rospy.Subscriber(subname, Header, callback=self.ros_out_time_callback(name, s))
             sinks[0].callback = self.ros_send_callback(o['name'])
             ofs.append(OutFlow(name=o['name'], dt=Time(nanos=o['dt']), sinks=sinks))
 
         # setup inflows
         p_in  = rospy.get_param("inflows")        
-        self.subscribers = {}
         ifs = []
         for i in p_in:
             m_class = get_class(i['message_class'])
@@ -67,7 +72,7 @@ class RosNode(Node):
                 rospy.Subscriber('/'+i['name'], m_class, callback=self.ros_push_callback(i['name']))
             
             ifs.append(InFlow(name=i['name'], dt=Time(nanos=i['dt']),
-                              time_callback=self.ros_time_callback(i['name'], name, max_qsize)))
+                              time_callback=self.ros_in_time_callback(i['name'], name, max_qsize)))
 
         # init parent
         super().__init__(name, time, dt, ifs, ofs, max_qsize)
@@ -91,8 +96,8 @@ class RosNode(Node):
             pub.publish(m)
         return __cb
 
-    def ros_time_callback(self, flow, sink, max_qsize):
-        pname = flow + "/" + sink
+    def ros_in_time_callback(self, flow, name, max_qsize):
+        pname = "/" + flow + "/time/" + name
         if pname not in self.publishers:
             self.publishers[pname] = rospy.Publisher(pname, Header, queue_size=max_qsize)
         tpub = self.publishers[pname]
@@ -102,6 +107,12 @@ class RosNode(Node):
             tpub.publish(h)
         return __cb
 
+    def ros_out_time_callback(self, flow, sink):
+        cb = self.time_callback(flow, sink)
+        def __cb(h):
+            time = Time(h.stamp.secs, h.stamp.nanos)
+            cb(time)
+        return __cb
             
     def ros_push_callback(self, flow):
         cb = self.push_callback(flow)

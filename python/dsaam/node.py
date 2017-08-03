@@ -16,7 +16,7 @@ class Time:
         self.nanos = nanos
 
     def __call__(self, other):
-        assert(type(other) is Time)
+        assert(isinstance(self, Time))
         self.sec = sec
         self.nanos = nanos
 
@@ -231,7 +231,7 @@ class Node:
         self.indexes = dict([(f.name, idx) for idx, f in enumerate(inflows)])
 
     def push(self, flow, m, time):
-        #print("[{}] [{}] pushing IN on flow {}".format(self.time, self.name, flow, self.indexes))
+        print("[{}] [{}] pushing IN on flow {}".format(self.time, self.name, flow, self.indexes))
         fidx = self.indexes[flow]
         self.inflows.push(fidx, m, time)
 
