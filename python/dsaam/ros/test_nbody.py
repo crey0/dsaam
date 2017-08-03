@@ -4,6 +4,10 @@ import numpy as np
 import os
 import errno
 import subprocess
+import re
+import sys
+
+ROS_PKG_PATH = "ROS_PACKAGE_PATH"
 
 def mkdir_p_file(path):
     fpath = os.path.abspath(path)
@@ -17,15 +21,26 @@ def mkdir_p_file(path):
             raise exc
     return fpath
 
+def pkg_root_path(path):
+    f = path.split("/")
+    f.reverse()
+    i = f.index("dsaam")
+    f.reverse()
+    return "/".join(f[:-1-i])
+
 LAUNCH = '<launch> \n @BODY@ \n </launch>'
 
-GROUP = '<group ns="@NAMESPACE@">\
-        <rosparam command="load" file="@YAML@" />\
-        <node type="@PYTHONFILE@"\
-              name="@NAME@"\
-              output="screen" respawn="false" required="true"\
-              cwd="node"\
-              launch-prefix="$(optenv PYTHON3_INTERPRETER)"/>\
+LAUNCH_PREFIX = 'launch-prefix="@RUNFILE@"'
+
+GROUP ='\
+        <group ns="@NAMESPACE@">\n\
+        <rosparam command="load" file="@YAML@" />\n\
+        <node type="@PYTHONFILE@"\n\
+              name="@NAME@"\n\
+              pkg="@PKG@"\n\
+              output="screen" respawn="false" required="true"\n\
+              cwd="node"\n\
+        />\
         </group>'
 
 ROSPARAM = '<rosparam command="load" file="@YAML@" />'
@@ -40,12 +55,14 @@ class LaunchFileCreator:
     def __init__(self):
         self.strings = []
 
-    def node(self, name, namespace, yaml_path, exec_path):
+    def node(self, name, namespace, exec_path, yaml_path, pkg_path, run_file):
         self.strings.append(
             GROUP.replace("@NAME@", name)\
             .replace("@NAMESPACE@", namespace)\
             .replace("@YAML@", yaml_path)\
-            .replace("@PYTHONFILE@", exec_path))
+            .replace("@PYTHONFILE@", exec_path)\
+            .replace("@PKG@", pkg_path))
+            #.replace("@RUNFILE@", run_file))
         return self
         
     def rosparam(self, yaml_path):
@@ -54,7 +71,7 @@ class LaunchFileCreator:
         return self
 
     def write(self, path):
-        string = LAUNCH.replace("@BODY@", "\n".concatenate(self.strings))
+        string = LAUNCH.replace("@BODY@", "\n".join(self.strings))
         mkdir_p_file(path)
         with open(path, 'w') as f:
             f.write(string)
@@ -113,12 +130,13 @@ def create_launch_file(path, autotest=False):
         'drawer': ['red, green','blue', 'yellow']}
         
     idx = {
-        'red': ['red-{}'.format(i) for i in range(n['red'])],
-        'green':['green-{}'.format(i) for i in range(n['green'])],
-        'blue': ['blue-{}'.format(i) for i in range(n['blue'])],
-        'yellow':['yellow-{}'.format(i) for i in range(n['yellow'])]}
+        'red': ['red_{}'.format(i) for i in range(n['red'])],
+        'green':['green_{}'.format(i) for i in range(n['green'])],
+        'blue': ['blue_{}'.format(i) for i in range(n['blue'])],
+        'yellow':['yellow_{}'.format(i) for i in range(n['yellow'])]}
     # END PARAMS
 
+    runfile = path + "/run_node.sh"
     conf_path = path + "/conf/"
     launch = LaunchFileCreator()
     global_params = { 
@@ -129,41 +147,57 @@ def create_launch_file(path, autotest=False):
     for c in colors:
         for num, i in enumerate(idx[c]):
             body_params = {
-                'position': positions[c][num],
-                'speed': speeds[c][num],
-                'mass': masses[c][num],
-                'radius': radii[c][num],
+                'position': positions[c][num].tolist(),
+                'speed': speeds[c][num].tolist(),
+                'mass': masses[c][num].tolist(),
+                'radius': radii[c][num].tolist(),
                 'color': c
             }
             outflows = [{
                 'name': i,
                 'message_class': "geometry_msgs.msg.PointStamped",
-                'dt': dt[c],
+                'dt': dt[c].to_nanos(),
                 'sinks': [j for color in colors for j in idx[color] if c in effectors[color]],
             }]
             inflows = [{
                 'name': j,
                 'message_class': "geometry_msgs.msg.PointStamped",
-                'dt': dt[color],
+                'dt': dt[color].to_nanos(),
                 } for color in effectors[c] for j in idx[color]]
             node_params= {
                 'max_qsize': max_qsize,
-                'start_time': start_time,
-                'dt': dt[c],
+                'start_time': start_time.to_nanos(),
+                'dt': dt[c].to_nanos(),
                 'outflows': outflows,
                 'inflows': inflows,
                 'body': body_params
             }
             yamlp = conf_path + "{}.yaml".format(i)
             create_yaml(yamlp, node_params)
-            launch.node(i, i, path + "/node.py", yamlp)
+            launch.node(i, i, "run_ros_node.sh", yamlp, "dsaam", runfile)
     launch.write(conf_path + "test_nbody.launch")
+
+    # Set ros package path to add the dsaam python root folder 
+    rospkgp = ""
+    if ROS_PKG_PATH in os.environ:
+        rospkgp = os.environ[ROS_PKG_PATH]
+    pkg_root = pkg_root_path(path)
+    rospkgp =  pkg_root + ":" + rospkgp
+    os.environ[ROS_PKG_PATH] = rospkgp
     return conf_path + "test_nbody.launch"
 
 def test_ros_nbody(autotest=True):
     path = os.path.abspath(os.path.dirname(__file__))
     launch_path = create_launch_file(path, autotest)
     cmd = "roslaunch {}".format(launch_path)
-    subprocess.run(cmd, shell=True, check=True)
+    p = subprocess.run(cmd, shell=True, check=True, stderr=subprocess.PIPE, universal_newlines=True)
+    if p.stderr is not None:
+        rex = re.compile('exit code (\d+)')
+        m = rex.search(p.stderr)
+        code = 0
+        if m is not None:
+            code = int(m.group(1))
+        print(p.stderr, file=sys.stderr)
+        assert code == 0, "One of the processes died with non-zero exit code {}".format(code)
 if __name__ == "__main__":
     test_ros_nbody()

@@ -1,10 +1,8 @@
 from ..test_nbody import stop_event, except_event, exception_collect,\
     Body, System, SystemOne, SystemDrawer, SystemOneNode, DrawerNode
 import rospy
-from .node import RosNode
+from .ros_node import RosNode
 from geometry_msgs.msg import PointStamped
-
-autotest = False
 
 def rosbridge(node):
     process = node.process
@@ -31,8 +29,7 @@ def shutdown_hook():
     stop_event.set()
 
 def make_ros_nbody_node():
-    global autotest
-    name = rospy.get_param('~name')
+    name = rospy.get_name()
     print('[{}] Building node'.format(name))
     autotest = rospy.get_param('/autotest')
 
@@ -40,7 +37,7 @@ def make_ros_nbody_node():
     bodies = {}
     for i in ifs:
         i_name = i['name']
-        i_p = rospy.get_param['/' + i_name + '/body']
+        i_p = rospy.get_param('/' + i_name + '/body')
         bodies[i_name] = Body(i_name,
                               i_p['position'], i_p['speed'], i_p['mass'], i_p['radius'],
                               i_p['color'])

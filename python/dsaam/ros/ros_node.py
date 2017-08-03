@@ -7,6 +7,12 @@ import importlib
 import string
 from threading import Semaphore
 
+def get_class(name_string):
+    m_name, c_name = name_string.rsplit('.', maxsplit=1)
+    module = importlib.import_module(m_name)
+    m_class = getattr(module, c_name)
+    return m_class
+
 class CountSubListener(SubscribeListener):
     def __init__(self, num_peers):
         self.semaphore = Semaphore()
@@ -27,8 +33,8 @@ class RosNode(Node):
     def __init__(self, name):
         # get global node parameters
         max_qsize = rospy.get_param('max_qsize')
-        time = rospy.get_param('start_time')
-        dt = rospy.get_param('dt')
+        time = Time(nanos=rospy.get_param('start_time'))
+        dt = Time(nanos=rospy.get_param('dt'))
 
         # TODO: setup management service
         
@@ -37,31 +43,29 @@ class RosNode(Node):
         self.publishers = {}
         sublisteners = []
         ofs = []
-        for o in p_pout:
-            m_name, c_name = string.rsplit(o['message_class'], '.', maxsplit=1)
-            module = importlib.import_module(m_name)
-            mclass = getattr(module, c_name)
-            subl = CountSubListener(num_peers=len(i['sinks']))
+        for o in p_out:
+            m_class = get_class(o['message_class'])
+            subl = CountSubListener(num_peers=len(o['sinks']))
             sublisteners.append(subl)
             self.publishers[o['name']] = \
-                rospy.Publisher(o['name'], mclass, subscribe_listener=subl, queue_size=max_qsize)
-            sink_names = i['sinks']
+                rospy.Publisher(o['name'], m_class, subscriber_listener=subl, queue_size=max_qsize)
+            sink_names = o['sinks']
             sinks = []
             for s in sink_names:
                 sinks.append(Sink(name=s, callback=None))
-            sinks[0].callback = self.ros_send_callback[o['name']]
-            ofs.append(OutFlow(name=o['name'], dt=Time(o['dt']), sinks=sinks))
+            sinks[0].callback = self.ros_send_callback(o['name'])
+            ofs.append(OutFlow(name=o['name'], dt=Time(nanos=o['dt']), sinks=sinks))
 
         # setup inflows
         p_in  = rospy.get_param("inflows")        
         self.subscribers = {}
         ifs = []
         for i in p_in:
-            m_name, c_name = string.rsplit(o['message_class'], '.', maxsplit=1)
+            m_class = get_class(i['message_class'])
             self.subscribers[i['name']] = \
-                rospy.Subscriber(i['name'], m_class, callback=self.ros_push_callback(o['name']))
+                rospy.Subscriber(i['name'], m_class, callback=self.ros_push_callback(i['name']))
             
-            ifs.append(InFlow(name=i['name'], dt=Time(i['dt']),
+            ifs.append(InFlow(name=i['name'], dt=Time(nanos=i['dt']),
                               time_callback=self.ros_time_callback(i['name'], name, max_qsize)))
 
         # init parent
@@ -74,7 +78,7 @@ class RosNode(Node):
         for s in sublisteners:
             s.wait()
 
-        print("Init DONE")
+        print("[{}] Init DONE".format(name))
         
     def ros_send_callback(self, flow):
         pub = self.publishers[flow]
@@ -102,12 +106,6 @@ class RosNode(Node):
             stamp = m.header.stamp
             dt = m.header.dt 
             cb(m,
-               Time(stamp.secs, stamp.nsecs),
-               Time(dt.secs, dt.nsecs))
+               Time(stamp.secs, stamp.nsecs))
+               #Time(dt.secs, dt.nsecs))
         return __cb
-        
-
-class OneThreadNode(RosNode):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args)
-        

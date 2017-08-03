@@ -20,6 +20,9 @@ class Time:
         self.sec = sec
         self.nanos = nanos
 
+    def to_nanos(self):
+        return self.sec * NS_IN_SECOND + self.nanos
+
     def __add__(self, other):
         nanos = self.nanos % NS_IN_SECOND + other.nanos % NS_IN_SECOND
         carry = nanos // NS_IN_SECOND + self.nanos //  NS_IN_SECOND + other.nanos // NS_IN_SECOND
@@ -42,7 +45,7 @@ class Time:
         return self.__lt__(other) or self.__eq__(other)
 
     def __eq__(self, other):
-        return self.sec == other.sec and self.nanos == other.nanos
+        return isinstance(other, Time) and self.sec == other.sec and self.nanos == other.nanos
 
     def __ne__(self, other):
         return not self.__eq__(other)
