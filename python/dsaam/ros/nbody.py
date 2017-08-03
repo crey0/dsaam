@@ -2,7 +2,7 @@ from ..test_nbody import stop_event, except_event, exception_collect,\
     Body, System, SystemOne, SystemDrawer, SystemOneNode, DrawerNode
 import rospy
 from .ros_node import RosNode
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import QuaternionStamped
 
 def rosbridge(node):
     process = node.process
@@ -11,14 +11,16 @@ def rosbridge(node):
     @exception_collect
     def _process(name, m, tmin_next):
         s, time, dt = m
-        state = [s.point.x, s.point.y]
+        state = ([s.quaternion.x, s.quaternion.y], [s.quaternion.z, s.quaternion.w])
         process(name, (state, time, dt), tmin_next)
 
     @exception_collect
     def _send(name, state, time):
-        s = PointStamped()
-        s.point.x = state[0]
-        s.point.y = state[1]
+        s = QuaternionStamped()
+        s.quaternion.x = state[0][0]
+        s.quaternion.y = state[0][1]
+        s.quaternion.x = state[1][0]
+        s.quaternion.x = state[1][1]
         send(name, s, time)
         
     node.process = _process

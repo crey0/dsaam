@@ -84,10 +84,12 @@ class RosNode(Node):
     def ros_send_callback(self, flow):
         pub = self.publishers[flow]
         def __cb(m, time):
+            print("[{}] OUT ROS message on flow {}".format(self.name, flow))
             h = Header()
             h.stamp = rospy.Time(time.sec, time.nanos)
             m.header = h
             pub.publish(m)
+        return __cb
 
     def ros_time_callback(self, flow, sink, max_qsize):
         pname = flow + "/" + sink
@@ -104,6 +106,7 @@ class RosNode(Node):
     def ros_push_callback(self, flow):
         cb = self.push_callback(flow)
         def __cb(m):
+            print("[{}] IN ROS message on flow {}".format(self.name, flow))
             stamp = m.header.stamp
             dt = m.header.dt 
             cb(m,

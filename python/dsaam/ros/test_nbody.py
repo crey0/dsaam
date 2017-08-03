@@ -158,13 +158,13 @@ def create_launch_file(path, autotest=False):
             }
             outflows = [{
                 'name': i,
-                'message_class': "geometry_msgs.msg.PointStamped",
+                'message_class': "geometry_msgs.msg.QuaternionStamped",
                 'dt': dt[c].to_nanos(),
                 'sinks': [j for color in idx for j in idx[color] if c in effectors[color]],
             }]
             inflows = [{
                 'name': j,
-                'message_class': "geometry_msgs.msg.PointStamped",
+                'message_class': "geometry_msgs.msg.QuaternionStamped",
                 'dt': dt[color].to_nanos(),
                 } for color in effectors[c] for j in idx[color]]
             node_params= {
@@ -186,7 +186,7 @@ def create_launch_file(path, autotest=False):
     outflows = []
     inflows = [{
         'name': j,
-        'message_class': "geometry_msgs.msg.PointStamped",
+        'message_class': "geometry_msgs.msg.QuaternionStamped",
         'dt': dt[color].to_nanos(),
     } for color in effectors[c] for j in idx[color]]
     node_params= {
