@@ -3,13 +3,10 @@ Decentralized Synchronisation Architecture for Asynchronous Middleware
 
 Requirements
 ------------
-
-Python: python>=3
-ROS: rospy, roscpp
+Python>=3.5
+ROS>=kinetic: rospy, roscpp
 
 
 Testing
 -------
-Python111
-make test
-
+PYTHON3_INTERPRETER=python3 nosetests3
