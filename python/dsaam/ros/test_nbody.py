@@ -160,13 +160,16 @@ def create_launch_file(path, autotest=False):
                 'name': i,
                 'message_class': "geometry_msgs.msg.QuaternionStamped",
                 'dt': dt[c].to_nanos(),
-                'sinks': [j for color in idx for j in idx[color] if c in effectors[color]],
+                'sinks': [j for color in idx for j in idx[color] if c in effectors[color]
+                          and not j == i],
             }]
             inflows = [{
                 'name': j,
                 'message_class': "geometry_msgs.msg.QuaternionStamped",
                 'dt': dt[color].to_nanos(),
-                } for color in effectors[c] for j in idx[color]]
+                } for color in effectors[c] for j in idx[color]
+                       if not j == i
+            ]
             node_params= {
                 'name': i,
                 'max_qsize': max_qsize,
