@@ -14,7 +14,7 @@ def rosbridge(node):
         s, time, dt = m
         state = (np.array([s.quaternion.x, s.quaternion.y]),
                  np.array([s.quaternion.z, s.quaternion.w]))
-        process(name, (state, time, dt), tmin_next)
+        return process(name, (state, time, dt), tmin_next)
 
     @exception_collect
     def _send(name, state, time):
