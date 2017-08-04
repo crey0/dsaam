@@ -114,7 +114,7 @@ class RosNode(Node):
     def ros_out_time_callback(self, flow, sink):
         cb = self.time_callback(flow, sink)
         def __cb(h):
-            time = Time(h.stamp.secs, h.stamp.nanos)
+            time = Time(h.stamp.secs, h.stamp.nsecs)
             cb(time)
         return __cb
             
@@ -123,7 +123,7 @@ class RosNode(Node):
         def __cb(m):
             print("[{}] IN ROS message on flow {}".format(self.name, flow))
             stamp = m.header.stamp
-            dt = m.header.dt 
+            #dt = m.header.dt
             cb(m,
                Time(stamp.secs, stamp.nsecs))
                #Time(dt.secs, dt.nsecs))
