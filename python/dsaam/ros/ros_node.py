@@ -42,17 +42,18 @@ class RosNode(Node):
         # ROS pubs and subs dicts
         self.publishers = {}
         self.subscribers = {}
+        sublisteners = []
         
         # setup outflows
         p_out = rospy.get_param("outflows")      
-        sublisteners = []
         ofs = []
         for o in p_out:
             m_class = get_class(o['message_class'])
             subl = CountSubListener(num_peers=len(o['sinks']))
             sublisteners.append(subl)
             self.publishers[o['name']] = \
-                rospy.Publisher('/'+o['name'], m_class, subscriber_listener=subl, queue_size=max_qsize)
+                rospy.Publisher('/'+o['name'], m_class, subscriber_listener=subl,
+                                queue_size=max_qsize)
             sink_names = o['sinks']
             sinks = []
             for s in sink_names:
@@ -66,13 +67,15 @@ class RosNode(Node):
         # setup inflows
         p_in  = rospy.get_param("inflows")        
         ifs = []
+        subl = CountSubListener(num_peers=len(p_in))
+        sublisteners.append(subl)
         for i in p_in:
             m_class = get_class(i['message_class'])
             self.subscribers[i['name']] = \
                 rospy.Subscriber('/'+i['name'], m_class, callback=self.ros_push_callback(i['name']))
             
             ifs.append(InFlow(name=i['name'], dt=Time(nanos=i['dt']),
-                              time_callback=self.ros_in_time_callback(i['name'], name, max_qsize)))
+                time_callback=self.ros_in_time_callback(i['name'], name, max_qsize, subl)))
 
         # init parent
         super().__init__(name, time, dt, ifs, ofs, max_qsize)
@@ -96,10 +99,11 @@ class RosNode(Node):
             pub.publish(m)
         return __cb
 
-    def ros_in_time_callback(self, flow, name, max_qsize):
+    def ros_in_time_callback(self, flow, name, max_qsize, sub_listen):
         pname = "/" + flow + "/time/" + name
         if pname not in self.publishers:
-            self.publishers[pname] = rospy.Publisher(pname, Header, queue_size=max_qsize)
+            self.publishers[pname] = rospy.Publisher(pname, Header, subscriber_listener=sub_listen,
+                                                     queue_size=max_qsize)
         tpub = self.publishers[pname]
         def __cb(time):
             h = Header()
