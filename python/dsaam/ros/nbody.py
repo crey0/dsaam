@@ -1,9 +1,12 @@
-from ..test_nbody import stop_event, except_event, exception_collect,\
+from ..test_nbody import stop_event, except_event, exception_collect, excepts,\
     Body, System, SystemOne, SystemDrawer, SystemOneNode, DrawerNode
 import rospy
-from .ros_node import RosNode
+from .ros_node import RosNode, Time
 from geometry_msgs.msg import QuaternionStamped
 import numpy as np
+from time import sleep
+
+autotest = False
 
 def rosbridge(node):
     process = node.process
@@ -33,6 +36,8 @@ def shutdown_hook():
     stop_event.set()
 
 def make_ros_nbody_node():
+    global autotest
+    
     name = rospy.get_param("name")
     print('[{}] Building node'.format(name))
     autotest = rospy.get_param('/autotest')
@@ -71,8 +76,13 @@ if __name__== '__main__':
     node = make_ros_nbody_node()
     print('[{}] Starting node'.format(node.name))
     node.start()
-    stop_event.wait()
+    if not autotest:
+        stop_event.wait()
+    else:
+        while node.time < Time(10)\
+              and not stop_event.is_set():
+            sleep(0.1)
     if not rospy.is_shutdown():
-        rospy.init_shutdown("Internal error during execution")
+        rospy.signal_shutdown("Internal error during execution")
     node.join(0.1)
     assert not except_event.is_set(), "Failure with {} exceptions".format(excepts.qsize())
