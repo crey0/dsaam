@@ -36,10 +36,10 @@ colors = ['red', 'green', 'blue', 'yellow']
 class Body:
     def __init__(self, name, p0, v0, mass, radius, color):
         self.name = name
-        self.p = p0
-        self.v = v0
-        self.mass = mass
-        self.radius = radius
+        self.p = np.array(p0, dtype=float)
+        self.v = np.array(v0, dtype=float)
+        self.mass = float(mass)
+        self.radius = float(radius)
         self.color = color
 
     def acceleration(self, p_others, m_others):

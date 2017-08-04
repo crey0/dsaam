@@ -3,6 +3,7 @@ from ..test_nbody import stop_event, except_event, exception_collect,\
 import rospy
 from .ros_node import RosNode
 from geometry_msgs.msg import QuaternionStamped
+import numpy as np
 
 def rosbridge(node):
     process = node.process
@@ -11,7 +12,8 @@ def rosbridge(node):
     @exception_collect
     def _process(name, m, tmin_next):
         s, time, dt = m
-        state = ([s.quaternion.x, s.quaternion.y], [s.quaternion.z, s.quaternion.w])
+        state = (np.array([s.quaternion.x, s.quaternion.y]),
+                 np.array([s.quaternion.z, s.quaternion.w]))
         process(name, (state, time, dt), tmin_next)
 
     @exception_collect
