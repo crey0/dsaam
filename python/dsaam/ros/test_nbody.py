@@ -229,5 +229,6 @@ def test_ros_nbody(autotest=True):
             code = int(m.group(1))
         print(p.stderr, file=sys.stderr)
         assert code == 0, "One of the processes died with non-zero exit code {}".format(code)
+
 if __name__ == "__main__":
     test_ros_nbody()
