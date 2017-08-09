@@ -11,13 +11,7 @@ namespace dsaam
   class Time
   {
   public:
-  
-    Time()
-    {
-      sec = 0;
-      nanos = 0;
-    }
-
+    
     Time(integer sec=0, integer nanos=0)
     {
       this->sec = sec;

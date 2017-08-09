@@ -9,7 +9,10 @@ node.hpp
 #include<boost/heap/fibonacci_heap.hpp>
 #include<dsaam/time.hpp>
 #include<dsaam/queue.hpp>
+#include<vector>
 #include<list>
+#include<functional>
+#include<memory>
 
 namespace dsaam
 {
@@ -54,17 +57,83 @@ namespace dsaam
     Time dt;
     std::list<Sink> sinks;
   } OutFlow;
-    
-  class MessageFlowMultiplexer
+
+  template<class T>
+  class MessageQueue : Queue<T>
   {
   public:
-    MessageFlowMultiplexer(std::list<InFlow> &inflows, const Time &time, unsigned int max_qsize):
-      time(time), max_qsize(max_qsize)
+    MessageQueue(Time start_time, Time dt, unsigned int max_size)
+      : Queue<T>(max_size), nextTime(start_time), dt(dt) {}
+
+    T && pop()
     {
+      T & m = Queue<T>::pop();
+      assert(m->time == nextTime);
+      nextTime = m->time + dt;
+      return std::move(m);
+    }
+
+    const Time & nextAt() const
+    {
+      return nextTime; 
+    }
+      
+  private:
+    Time nextTime;
+    Time dt;
+  };
+
+  template<typename T>
+  bool operator<(const MessageQueue<T> &l, const MessageQueue<T> &r) { return l.nextAt() < r.nextAt();}
+  template<typename T>
+  bool operator>(const MessageQueue<T> &l, const MessageQueue<T> &r) { return r < l;}
+  
+  template<class T>
+  class MessageFlowMultiplexer
+  {
+       
+    class heap_data;
+    typedef  boost::heap::fibonacci_heap<heap_data,
+					 boost::heap::compare<std::greater<heap_data>>> heap_type;
+    typedef std::allocator<MessageQueue<T>> MQAllocType;
+    typedef std::allocator_traits<MQAllocType> MQAllocTraits;
+    
+    class heap_data
+    {
+    public:
+      heap_data(unsigned int index, MessageQueue<T> & queue) : queue(queue) {}
+      typename heap_type::handle_type handle;
+      MessageQueue<T> & queue;
+
+      bool operator>(const heap_data& r) const { return queue > r.queue;}
+      bool operator<(const heap_data& r) const { return queue > r.queue;}
+    };
+
+
+  public:
+    MessageFlowMultiplexer(std::list<InFlow> &inflows, const Time &time, unsigned int max_qsize):
+      inflows(inflows), time(time), max_qsize(max_qsize), mqalloc(), heap()
+    {
+      this->queues = MQAllocTraits::allocate(mqalloc, inflows.size());
+      int index = 0;
       for(InFlow flow : inflows)
       {
-        this->inflows.push_back(Queue<MessageBase>(max_qsize));
+        MQAllocTraits::construct(mqalloc, &this->queues[index],
+				 time, flow.dt, max_qsize);
+	typename heap_type::handle_type h = heap.push(heap_data(index,
+								this->queues[index]));
+	(*h).handle = h;
+	index++;
       } 
+    }
+
+    ~MessageFlowMultiplexer()
+    {
+      for(int i=0; i<inflows.size(); i++)
+	{
+	  MQAllocTraits::destroy(mqalloc, &queues[i]);
+	}
+      MQAllocTraits::deallocate(mqalloc, queues, inflows.size());
     }
   
   void push(string flow, MessageBase & message)
@@ -72,20 +141,27 @@ namespace dsaam
     NULL;
   }
 
-  MessageBase & pop()
+  MessageBase && pop()
   {
-    return NULL;
+    heap_data & q = const_cast<heap_data &>(heap.top());
+    auto m = q.queue.pop();
+    heap.update(q.handle);
+    return std::move(m);
   }
 
   Time nextTime()
   {
-  NULL;
-}
+    return heap.top().queue.nextAt();
+  }
     
-public:
-  Time time;
-  std::list<Queue<MessageBase>> inflows;
-  unsigned int max_qsize;
+  public:
+    std::list<InFlow> inflows;
+    Time time;
+    unsigned int max_qsize;
+    MQAllocType mqalloc;
+    heap_type heap;
+    MessageQueue<T> * queues;
+   
     
 };
 
@@ -105,13 +181,17 @@ public:
 
   class Node
   {
+    typedef std::shared_ptr<class BaseMessage> mpointer;
   public:      
-    Node(string &name, Time &time, Time &dt, void *inflows, std::list<OutFlow> outflows, unsigned int max_qsize) :
-      name(name), time(time), dt(dt), inflows(inflows, time, max_qsize), outflows(outflows.size())
+    Node(string &name, Time &time, Time &dt, std::list<InFlow> &inflows,
+	 std::list<OutFlow> &outflows, unsigned int max_qsize) :
+      name(name), time(time), dt(dt),
+      inflows(inflows, time, max_qsize), outflows()
     {
       for(OutFlow flow : outflows)
 	{
-	  this->outflows.push_back(OutMessageFlow(flow.name, time, flow.dt, flow.sinks, max_qsize));
+	  this->outflows.push_back(OutMessageFlow(flow.name, time, flow.dt,
+						  flow.sinks, max_qsize));
 	}
     }
 
@@ -119,7 +199,7 @@ public:
     string name;
     Time time;
     Time dt;
-    MessageFlowMultiplexer inflows;
+    MessageFlowMultiplexer<mpointer> inflows;
     std::list<OutMessageFlow> outflows;  
   };
     
