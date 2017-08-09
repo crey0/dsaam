@@ -63,7 +63,7 @@ namespace dsaam
 	M && e = std::move(buffer[head]);
 	head = (head - 1) % max_size;
 	n_free_to_push.increase();
-	return e;
+	return std::move(e);
       }
     private:
       unsigned int max_size;

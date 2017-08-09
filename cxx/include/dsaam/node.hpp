@@ -10,9 +10,11 @@ node.hpp
 #include<dsaam/time.hpp>
 #include<dsaam/queue.hpp>
 #include<vector>
+#include<deque>
 #include<list>
 #include<functional>
 #include<memory>
+#include<mutex>
 
 namespace dsaam
 {
@@ -25,28 +27,26 @@ namespace dsaam
   public:
     const Time time;
   };
-  
-  class MessageCallback
-  {
-  public:
-    virtual void operator()(MessageBase m) = 0;
-  };
+
+  typedef  void(*message_callback)(const std::shared_ptr<MessageBase const>, const Time &);
   
   typedef struct InFlow
   {
-    InFlow(string name, Time dt, MessageCallback &time_callback)
-      : name(name), dt(dt), time_callback(time_callback) {}
-      string name;
-      Time dt;
-      MessageCallback &time_callback;
+    InFlow(string name, Time dt,
+	   message_callback &callback, message_callback &time_callback)
+      : name(name), dt(dt), callback(callback), time_callback(time_callback) {}
+    string name;
+    Time dt;
+    message_callback &callback;
+    message_callback &time_callback;
   } InFlow;
   
   typedef struct Sink
   {
-    Sink(string name, MessageCallback &send_callback)
+    Sink(string name, message_callback &send_callback)
       : name(name), send_callback(send_callback) {}
     string name;
-    MessageCallback &send_callback;
+    message_callback &send_callback;
   } Sink;
 
   typedef struct OutFlow
@@ -67,7 +67,7 @@ namespace dsaam
 
     T && pop()
     {
-      T & m = Queue<T>::pop();
+      T && m = Queue<T>::pop();
       assert(m->time == nextTime);
       nextTime = m->time + dt;
       return std::move(m);
@@ -84,9 +84,12 @@ namespace dsaam
   };
 
   template<typename T>
-  bool operator<(const MessageQueue<T> &l, const MessageQueue<T> &r) { return l.nextAt() < r.nextAt();}
+  bool operator<(const MessageQueue<T> &l, const MessageQueue<T> &r)
+  { return l.nextAt() < r.nextAt();}
+
   template<typename T>
-  bool operator>(const MessageQueue<T> &l, const MessageQueue<T> &r) { return r < l;}
+  bool operator>(const MessageQueue<T> &l, const MessageQueue<T> &r)
+  { return r < l;}
   
   template<class T>
   class MessageFlowMultiplexer
@@ -101,9 +104,10 @@ namespace dsaam
     class heap_data
     {
     public:
-      heap_data(unsigned int index, MessageQueue<T> & queue) : queue(queue) {}
-      typename heap_type::handle_type handle;
+      heap_data(InFlow &flow, MessageQueue<T> & queue) : flow(flow), queue(queue) {}
+      InFlow &flow;
       MessageQueue<T> & queue;
+      typename heap_type::handle_type handle;
 
       bool operator>(const heap_data& r) const { return queue > r.queue;}
       bool operator<(const heap_data& r) const { return queue > r.queue;}
@@ -116,11 +120,11 @@ namespace dsaam
     {
       this->queues = MQAllocTraits::allocate(mqalloc, inflows.size());
       int index = 0;
-      for(InFlow flow : inflows)
+      for(InFlow & flow : this->inflows)
       {
         MQAllocTraits::construct(mqalloc, &this->queues[index],
 				 time, flow.dt, max_qsize);
-	typename heap_type::handle_type h = heap.push(heap_data(index,
+	typename heap_type::handle_type h = heap.push(heap_data(flow,
 								this->queues[index]));
 	(*h).handle = h;
 	index++;
@@ -136,17 +140,17 @@ namespace dsaam
       MQAllocTraits::deallocate(mqalloc, queues, inflows.size());
     }
   
-  void push(string flow, MessageBase & message)
+  void push(unsigned int flow_index, T && message)
   {
-    NULL;
+    queues[flow_index].push(std::move(message));
   }
 
-  MessageBase && pop()
+  void next()
   {
     heap_data & q = const_cast<heap_data &>(heap.top());
     auto m = q.queue.pop();
     heap.update(q.handle);
-    return std::move(m);
+    q.flow.callback(std::move(m), nextTime());
   }
 
   Time nextTime()
@@ -165,23 +169,68 @@ namespace dsaam
     
 };
 
+  template<class T>
   class OutMessageFlow
   {
+    typedef boost::heap::fibonacci_heap<int> heap_type;
   public:
     OutMessageFlow(string name, Time start_time, Time dt, std::list<Sink> &sinks,
 		   unsigned int max_qsize)
-      : name(name), time(start_time), dt(dt), sinks(sinks) {}
+      :  name(name), max_qsize(max_qsize), time(start_time), dt(dt), sinks(sinks),
+	heap(), heap_handles() {}
+  
+    void time_callback(unsigned int subscriber, const Time &t)
+    {
+      int top = max_qsize;
+      {
+	std::lock_guard<std::mutex>(this->m);
+      
+	typename heap_type::handle_type h = heap_handles[subscriber]
+	  *h -= 1;
+	heap.update(h);
+	top = heap.top();
+      }
+      if (top<max_qsize)
+	cv.notify_one();
+    }
+    
+    void send(T message)
+    {
+      assert(message->time == time + dt);
+
+      std::unique_lock<std::mutex> lk(m);
+      cv.wait(lk, [this]{return heap.top() > 0;});
+      
+      unsigned int index = 0;
+      for(Sink s : sinks)
+	{
+	  if(s.send_callback != nullptr) s.send_callback(message);
+	  typename heap_type::handle_type h=heap_handles[index++];
+	  (*h) += 1;
+	  heap.update(h);
+	}
+
+      lk.unlock();
+      cv.notify_one();
+    }
+
   public:
     const string name;
+
   private:
+    unsigned int max_qsize;
     Time time;
     Time dt;
     std::list<Sink> sinks;
+    heap_type heap;
+    std::vector<heap_type::handle_type> heap_handles;
+    std::mutex m;
+    std::condition_variable cv;
   };
 
   class Node
   {
-    typedef std::shared_ptr<class BaseMessage> mpointer;
+    typedef std::shared_ptr<class MessageBase> mpointer;
   public:      
     Node(string &name, Time &time, Time &dt, std::list<InFlow> &inflows,
 	 std::list<OutFlow> &outflows, unsigned int max_qsize) :
@@ -190,17 +239,26 @@ namespace dsaam
     {
       for(OutFlow flow : outflows)
 	{
-	  this->outflows.push_back(OutMessageFlow(flow.name, time, flow.dt,
-						  flow.sinks, max_qsize));
+	  this->outflows.emplace_back(flow.name, time, flow.dt,
+						  flow.sinks, max_qsize);
 	}
     }
 
+    void next()
+    {
+	this->inflows.next();
+    }
+
+    void send_callback(mpointer mp)
+    {
+      assert(mp->time > time);
+    }
   public:
     string name;
     Time time;
     Time dt;
     MessageFlowMultiplexer<mpointer> inflows;
-    std::list<OutMessageFlow> outflows;  
+    std::deque<OutMessageFlow<mpointer>> outflows;  
   };
     
 }
