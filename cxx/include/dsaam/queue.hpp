@@ -3,21 +3,49 @@
 #include <mutex>
 #include <condition_variable>
 #include <vector>
-
+#include <type_traits>
 namespace dsaam
 {
-
-  class Semaphore
+  template<bool isBounded>
+  class _Semaphore
   {
+  private:
+    typedef struct NoCheck
+    {
+      NoCheck(unsigned int) {}
+      
+      inline void operator()(int)
+      {
+	;
+      }
+    }NoCheck;
+
+    typedef struct BoundedCheck
+    {
+      BoundedCheck(unsigned int bound) : bound(bound) {}
+      
+      inline void operator()(int value)
+      {
+	assert(value <= bound);
+	return value <= bound;
+      }
+      unsigned int bound;
+    }BoundedCheck;
+      
+    typedef typename std::conditional<isBounded, BoundedCheck, NoCheck>::type CheckType;
+    
   public:
-    Semaphore(unsigned int tokens, bool bounded=false)
-      : tokens(tokens), bounded(bounded) {}
+    _Semaphore(unsigned int tokens)
+      : tokens(tokens), bounded_check(tokens)
+    {
+    }
 
     void increase()
     {
       {
 	std::lock_guard<std::mutex>(this->m);
 	tokens +=1;
+        bounded_check(tokens);
       }
       cv.notify_one();
     }
@@ -31,13 +59,16 @@ namespace dsaam
       cv.notify_one();
     }
     
-  private:
+  private:    
     unsigned int tokens;
-    bool bounded;
+    CheckType bounded_check;
     std::mutex m;
     std::condition_variable cv;
     
   };
+  
+  typedef _Semaphore<false> Semaphore;
+  typedef _Semaphore<true> BoundedSemaphore;
   
   template<typename M>
   class Queue
