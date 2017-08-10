@@ -15,6 +15,7 @@ node.hpp
 #include<functional>
 #include<memory>
 #include<mutex>
+#include <exception>
 
 namespace dsaam
 {
@@ -141,6 +142,16 @@ namespace dsaam
 	}
       MQAllocTraits::deallocate(mqalloc, queues, inflows.size());
     }
+
+    unsigned int flow_index(const string & name)
+    {
+      for(int i=0; i<inflows.size(); i++)
+	{
+	  if (inflows[i].name == name) return i; 
+	}
+      throw  std::domain_error("No inflow " + name + " defined on this node");
+ 
+    }
   
   void push(unsigned int flow_index, T && message)
   {
@@ -181,7 +192,18 @@ namespace dsaam
 		   unsigned int max_qsize)
       :  name(name), max_qsize(max_qsize), time(start_time), dt(dt), sinks(sinks),
 	heap(), heap_handles() {}
-  
+
+
+    unsigned int subscriber_index(const string & name)
+    {
+      for(int i=0; i<sinks.size(); i++)
+	{
+	  if (sinks[i].name == name) return i; 
+	}
+      throw  std::domain_error("No sink " + name + " defined on outflow " + this->name);
+ 
+    }
+
 
     void time_callback(unsigned int subscriber, const Time &t)
     {
@@ -254,10 +276,17 @@ namespace dsaam
     }
 
     //TODO: how to implement assert nextTime >= message.time ?
+    
+    
     std::function<void (mpointer)> send_callback(unsigned int flow)
     {
       using std::placeholders::_1;
       return std::bind(&OutMessageFlow<mpointer>::send, &outflows[flow], _1);
+    }
+    
+    std::function<void (mpointer)> send_callback(const string & flow)
+    {
+      return send_callback(_out_flow_index(flow));
     }
 
     std::function<void (const Time &)> time_callback(unsigned int flow, unsigned int sink)
@@ -266,10 +295,20 @@ namespace dsaam
       return std::bind(&OutMessageFlow<mpointer>::time_callback, &outflows[flow], sink, _1);
     }
 
+    std::function<void (const Time &)> time_callback(const string &flow, const string &sink)
+    {
+      unsigned int iflow = _out_flow_index(flow);
+      return time_callback(iflow, _out_flow_sink_index(iflow, sink));
+    }
     std::function<void (mpointer)> message_callback(unsigned int flow)
     {
       using std::placeholders::_1;
       return std::bind(&MessageFlowMultiplexer<mpointer>::push, inflows, flow, _1);
+    }
+
+    std::function<void (mpointer)> message_callback(const string &flow)
+    {
+      return message_callback(_in_flow_index(flow));
     }
 
     void step(const Time & t)
@@ -286,6 +325,26 @@ namespace dsaam
     const Time & dt()
     {
       return _dt;
+    }
+
+  private:
+    unsigned int _out_flow_index(const string & name)
+    {
+      for(unsigned int i=0; i<outflows.size(); i++)
+	{
+	  if(outflows[i].name == name) return i;
+	}
+      throw  std::domain_error("No outflow "+name+" defined on this node");
+    }
+
+      unsigned int _out_flow_sink_index(unsigned int flow, const string & name)
+    {
+    return outflows[flow].subscriber_index(name);
+  }
+
+    unsigned int _in_flow_index(const string & name)
+    {
+    return inflows.flow_index(name);
     }
     
   public:
