@@ -4,6 +4,8 @@
 #include <condition_variable>
 #include <vector>
 #include <type_traits>
+#include <dsaam/exceptions.hpp>
+
 namespace dsaam
 {
   template<bool isBounded>
@@ -26,8 +28,8 @@ namespace dsaam
       
       inline void operator()(int value)
       {
-	assert(value <= bound);
-	return value <= bound;
+	logic_except(value <= bound,
+		     to_string("Bounded semaphore has exceeded bounds ",value,">",bound));
       }
       unsigned int bound;
     }BoundedCheck;
