@@ -29,24 +29,26 @@ namespace dsaam
   };
 
   typedef  void(*message_callback)(const std::shared_ptr<MessageBase const>, const Time &);
+  typedef  void(*send_callback)(const std::shared_ptr<MessageBase const>);
+  typedef  void(*time_callback)(const Time &);
   
   typedef struct InFlow
   {
     InFlow(string name, Time dt,
-	   message_callback &callback, message_callback &time_callback)
+	   message_callback &callback, time_callback &time_callback)
       : name(name), dt(dt), callback(callback), time_callback(time_callback) {}
     string name;
     Time dt;
     message_callback &callback;
-    message_callback &time_callback;
+    time_callback &time_callback;
   } InFlow;
   
   typedef struct Sink
   {
-    Sink(string name, message_callback &send_callback)
+    Sink(string name, send_callback &send_callback)
       : name(name), send_callback(send_callback) {}
     string name;
-    message_callback &send_callback;
+    send_callback &send_callback;
   } Sink;
 
   typedef struct OutFlow
@@ -59,7 +61,7 @@ namespace dsaam
   } OutFlow;
 
   template<class T>
-  class MessageQueue : Queue<T>
+  class MessageQueue : public Queue<T>
   {
   public:
     MessageQueue(Time start_time, Time dt, unsigned int max_size)
@@ -150,6 +152,7 @@ namespace dsaam
     heap_data & q = const_cast<heap_data &>(heap.top());
     auto m = q.queue.pop();
     heap.update(q.handle);
+    q.flow.time_callback(nextTime());
     q.flow.callback(std::move(m), nextTime());
   }
 
@@ -179,14 +182,15 @@ namespace dsaam
       :  name(name), max_qsize(max_qsize), time(start_time), dt(dt), sinks(sinks),
 	heap(), heap_handles() {}
   
+
     void time_callback(unsigned int subscriber, const Time &t)
     {
       int top = max_qsize;
       {
 	std::lock_guard<std::mutex>(this->m);
       
-	typename heap_type::handle_type h = heap_handles[subscriber]
-	  *h -= 1;
+	typename heap_type::handle_type h = heap_handles[subscriber];
+	*h -= 1;
 	heap.update(h);
 	top = heap.top();
       }
@@ -234,12 +238,12 @@ namespace dsaam
   public:      
     Node(string &name, Time &time, Time &dt, std::list<InFlow> &inflows,
 	 std::list<OutFlow> &outflows, unsigned int max_qsize) :
-      name(name), time(time), dt(dt),
+      name(name), _time(time), _dt(dt),
       inflows(inflows, time, max_qsize), outflows()
     {
       for(OutFlow flow : outflows)
 	{
-	  this->outflows.emplace_back(flow.name, time, flow.dt,
+	  this->outflows.emplace_back(flow.name, _time, flow.dt,
 						  flow.sinks, max_qsize);
 	}
     }
@@ -249,14 +253,46 @@ namespace dsaam
 	this->inflows.next();
     }
 
-    void send_callback(mpointer mp)
+    //TODO: how to implement assert nextTime >= message.time ?
+    std::function<void (mpointer)> send_callback(unsigned int flow)
     {
-      assert(mp->time > time);
+      using std::placeholders::_1;
+      return std::bind(&OutMessageFlow<mpointer>::send, &outflows[flow], _1);
     }
+
+    std::function<void (const Time &)> time_callback(unsigned int flow, unsigned int sink)
+    {
+      using std::placeholders::_1;
+      return std::bind(&OutMessageFlow<mpointer>::time_callback, &outflows[flow], sink, _1);
+    }
+
+    std::function<void (mpointer)> message_callback(unsigned int flow)
+    {
+      using std::placeholders::_1;
+      return std::bind(&MessageFlowMultiplexer<mpointer>::push, inflows, flow, _1);
+    }
+
+    void step(const Time & t)
+    {
+      assert(t >= _time);
+      _time = t;
+    }
+
+    const Time & time()
+    {
+      return _time;
+    }
+
+    const Time & dt()
+    {
+      return _dt;
+    }
+    
   public:
-    string name;
-    Time time;
-    Time dt;
+    const string name;
+  private:
+    Time _time;
+    Time _dt;
     MessageFlowMultiplexer<mpointer> inflows;
     std::deque<OutMessageFlow<mpointer>> outflows;  
   };
