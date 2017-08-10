@@ -136,7 +136,7 @@ namespace dsaam
 
     ~MessageFlowMultiplexer()
     {
-      for(int i=0; i<inflows.size(); i++)
+      for(size_t i=0; i<inflows.size(); i++)
 	{
 	  MQAllocTraits::destroy(mqalloc, &queues[i]);
 	}
@@ -188,7 +188,7 @@ namespace dsaam
   template<class T>
   class OutMessageFlow
   {
-    typedef boost::heap::fibonacci_heap<int> heap_type;
+    typedef boost::heap::fibonacci_heap<unsigned int> heap_type;
   public:
     OutMessageFlow(string name, Time start_time, Time dt, std::list<Sink> &sinks,
 		   unsigned int max_qsize)
@@ -209,9 +209,9 @@ namespace dsaam
     }
 
 
-    void time_callback(unsigned int subscriber, const Time &t)
+    void time_callback(unsigned int subscriber, const Time &)
     {
-      int top = max_qsize;
+      unsigned int top = max_qsize;
       {
 	std::lock_guard<std::mutex>(this->m);
       
