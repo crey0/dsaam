@@ -124,14 +124,14 @@ namespace dsaam
       this->queues = MQAllocTraits::allocate(mqalloc, inflows.size());
       int index = 0;
       for(InFlow & flow : this->inflows)
-      {
-        MQAllocTraits::construct(mqalloc, &this->queues[index],
-				 time, flow.dt, max_qsize);
-	typename heap_type::handle_type h = heap.push(heap_data(flow,
-								this->queues[index]));
-	(*h).handle = h;
-	index++;
-      } 
+	{
+	  MQAllocTraits::construct(mqalloc, &this->queues[index],
+				   time, flow.dt, max_qsize);
+	  typename heap_type::handle_type h = heap.push(heap_data(flow,
+								  this->queues[index]));
+	  (*h).handle = h;
+	  index++;
+	} 
     }
 
     ~MessageFlowMultiplexer()
@@ -145,32 +145,34 @@ namespace dsaam
 
     unsigned int flow_index(const string & name)
     {
-      for(int i=0; i<inflows.size(); i++)
+      unsigned int i = 0;
+      for(auto s : inflows)
 	{
-	  if (inflows[i].name == name) return i; 
+	  if (s.name == name) return i;
+	  i++;
 	}
       throw  std::domain_error("No inflow " + name + " defined on this node");
  
     }
   
-  void push(unsigned int flow_index, T && message)
-  {
-    queues[flow_index].push(std::move(message));
-  }
+    void push(unsigned int flow_index, T && message)
+    {
+      queues[flow_index].push(std::move(message));
+    }
 
-  void next()
-  {
-    heap_data & q = const_cast<heap_data &>(heap.top());
-    auto m = q.queue.pop();
-    heap.update(q.handle);
-    q.flow.time_callback(nextTime());
-    q.flow.callback(std::move(m), nextTime());
-  }
+    void next()
+    {
+      heap_data & q = const_cast<heap_data &>(heap.top());
+      auto m = q.queue.pop();
+      heap.update(q.handle);
+      q.flow.time_callback(nextTime());
+      q.flow.callback(std::move(m), nextTime());
+    }
 
-  Time nextTime()
-  {
-    return heap.top().queue.nextAt();
-  }
+    Time nextTime()
+    {
+      return heap.top().queue.nextAt();
+    }
     
   public:
     std::list<InFlow> inflows;
@@ -181,7 +183,7 @@ namespace dsaam
     MessageQueue<T> * queues;
    
     
-};
+  };
 
   template<class T>
   class OutMessageFlow
@@ -191,14 +193,16 @@ namespace dsaam
     OutMessageFlow(string name, Time start_time, Time dt, std::list<Sink> &sinks,
 		   unsigned int max_qsize)
       :  name(name), max_qsize(max_qsize), time(start_time), dt(dt), sinks(sinks),
-	heap(), heap_handles() {}
+	 heap(), heap_handles() {}
 
 
     unsigned int subscriber_index(const string & name)
     {
-      for(int i=0; i<sinks.size(); i++)
+      unsigned int i = 0;
+      for(auto s : sinks)
 	{
-	  if (sinks[i].name == name) return i; 
+	  if (s.name == name) return i;
+	  i++;
 	}
       throw  std::domain_error("No sink " + name + " defined on outflow " + this->name);
  
@@ -207,38 +211,38 @@ namespace dsaam
 
     void time_callback(unsigned int subscriber, const Time &t)
     {
-      int top = max_qsize;
-      {
-	std::lock_guard<std::mutex>(this->m);
+    int top = max_qsize;
+    {
+    std::lock_guard<std::mutex>(this->m);
       
-	typename heap_type::handle_type h = heap_handles[subscriber];
-	*h -= 1;
-	heap.update(h);
-	top = heap.top();
-      }
-      if (top<max_qsize)
-	cv.notify_one();
-    }
+    typename heap_type::handle_type h = heap_handles[subscriber];
+    *h -= 1;
+    heap.update(h);
+    top = heap.top();
+  }
+    if (top<max_qsize)
+      cv.notify_one();
+  }
     
     void send(T message)
     {
-      assert(message->time == time + dt);
+    assert(message->time == time + dt);
 
-      std::unique_lock<std::mutex> lk(m);
-      cv.wait(lk, [this]{return heap.top() > 0;});
+    std::unique_lock<std::mutex> lk(m);
+    cv.wait(lk, [this]{return heap.top() > 0;});
       
-      unsigned int index = 0;
-      for(Sink s : sinks)
-	{
-	  if(s.send_callback != nullptr) s.send_callback(message);
-	  typename heap_type::handle_type h=heap_handles[index++];
-	  (*h) += 1;
-	  heap.update(h);
-	}
+    unsigned int index = 0;
+    for(Sink s : sinks)
+      {
+    if(s.send_callback != nullptr) s.send_callback(message);
+    typename heap_type::handle_type h=heap_handles[index++];
+    (*h) += 1;
+    heap.update(h);
+  }
 
-      lk.unlock();
-      cv.notify_one();
-    }
+    lk.unlock();
+    cv.notify_one();
+  }
 
   public:
     const string name;
@@ -254,98 +258,96 @@ namespace dsaam
     std::condition_variable cv;
   };
 
-  class Node
-  {
+    class Node
+    {
     typedef std::shared_ptr<class MessageBase> mpointer;
   public:      
     Node(string &name, Time &time, Time &dt, std::list<InFlow> &inflows,
-	 std::list<OutFlow> &outflows, unsigned int max_qsize) :
+      std::list<OutFlow> &outflows, unsigned int max_qsize) :
       name(name), _time(time), _dt(dt),
       inflows(inflows, time, max_qsize), outflows()
     {
-      for(OutFlow flow : outflows)
-	{
-	  this->outflows.emplace_back(flow.name, _time, flow.dt,
-						  flow.sinks, max_qsize);
-	}
-    }
+    for(OutFlow flow : outflows)
+      {
+    this->outflows.emplace_back(flow.name, _time, flow.dt,
+      flow.sinks, max_qsize);
+  }
+  }
 
-    void next()
+      void next()
     {
-	this->inflows.next();
-    }
+    this->inflows.next();
+  }
 
-    //TODO: how to implement assert nextTime >= message.time ?
+	//TODO: how to implement assert nextTime >= message.time ?
+	std::function<void (mpointer)> send_callback(unsigned int flow)
+    {
+    using std::placeholders::_1;
+    return std::bind(&OutMessageFlow<mpointer>::send, &outflows[flow], _1);
+  }
     
-    
-    std::function<void (mpointer)> send_callback(unsigned int flow)
+	  std::function<void (mpointer)> send_callback(const string & flow)
     {
-      using std::placeholders::_1;
-      return std::bind(&OutMessageFlow<mpointer>::send, &outflows[flow], _1);
-    }
-    
-    std::function<void (mpointer)> send_callback(const string & flow)
-    {
-      return send_callback(_out_flow_index(flow));
-    }
+    return send_callback(_out_flow_index(flow));
+  }
 
-    std::function<void (const Time &)> time_callback(unsigned int flow, unsigned int sink)
+	    std::function<void (const Time &)> time_callback(unsigned int flow, unsigned int sink)
     {
-      using std::placeholders::_1;
-      return std::bind(&OutMessageFlow<mpointer>::time_callback, &outflows[flow], sink, _1);
-    }
+    using std::placeholders::_1;
+    return std::bind(&OutMessageFlow<mpointer>::time_callback, &outflows[flow], sink, _1);
+  }
 
-    std::function<void (const Time &)> time_callback(const string &flow, const string &sink)
+	      std::function<void (const Time &)> time_callback(const string &flow, const string &sink)
     {
-      unsigned int iflow = _out_flow_index(flow);
-      return time_callback(iflow, _out_flow_sink_index(iflow, sink));
-    }
-    std::function<void (mpointer)> message_callback(unsigned int flow)
+    unsigned int iflow = _out_flow_index(flow);
+    return time_callback(iflow, _out_flow_sink_index(iflow, sink));
+  }
+		std::function<void (mpointer)> message_callback(unsigned int flow)
     {
-      using std::placeholders::_1;
-      return std::bind(&MessageFlowMultiplexer<mpointer>::push, inflows, flow, _1);
-    }
+    using std::placeholders::_1;
+    return std::bind(&MessageFlowMultiplexer<mpointer>::push, inflows, flow, _1);
+  }
 
-    std::function<void (mpointer)> message_callback(const string &flow)
+		  std::function<void (mpointer)> message_callback(const string &flow)
     {
-      return message_callback(_in_flow_index(flow));
-    }
+    return message_callback(_in_flow_index(flow));
+  }
 
-    void step(const Time & t)
+		    void step(const Time & t)
     {
-      assert(t >= _time);
-      _time = t;
-    }
+    assert(t >= _time);
+    _time = t;
+  }
 
-    const Time & time()
+		      const Time & time()
     {
-      return _time;
-    }
+    return _time;
+  }
 
-    const Time & dt()
+			const Time & dt()
     {
-      return _dt;
-    }
+    return _dt;
+  }
 
   private:
     unsigned int _out_flow_index(const string & name)
     {
-      for(unsigned int i=0; i<outflows.size(); i++)
-	{
-	  if(outflows[i].name == name) return i;
-	}
-      throw  std::domain_error("No outflow "+name+" defined on this node");
-    }
+    for(unsigned int i=0; i<outflows.size(); i++)
+      {
+    if(outflows[i].name == name) return i;
+  }
+    throw  std::domain_error("No outflow "+name+" defined on this node");
+  }
 
       unsigned int _out_flow_sink_index(unsigned int flow, const string & name)
     {
     return outflows[flow].subscriber_index(name);
   }
 
-    unsigned int _in_flow_index(const string & name)
+	unsigned int _in_flow_index(const string & name)
     {
     return inflows.flow_index(name);
-    }
+  }
     
   public:
     const string name;
@@ -356,5 +358,5 @@ namespace dsaam
     std::deque<OutMessageFlow<mpointer>> outflows;  
   };
     
-}
+  }
 #endif //DSAAM_NODE_HPP
