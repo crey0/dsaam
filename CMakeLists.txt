@@ -27,3 +27,5 @@ add_library(dsaam ${DSAAM_SRCS})
 target_link_libraries(dsaam)
 
 
+add_executable(nbody_threads test/cxx/nbody_threads.cpp)
+target_link_libraries(nbody_threads dsaam)
