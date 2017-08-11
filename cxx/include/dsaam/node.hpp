@@ -15,7 +15,8 @@
 #include<functional>
 #include<memory>
 #include<mutex>
-#include <exception>
+#include<exception>
+#include<thread>
 
 namespace dsaam
 {
@@ -279,7 +280,6 @@ namespace dsaam
       this->inflows.next();
     }
 
-    //TODO: how to implement assert nextTime >= message.time ?
     std::function<void (mpointer)> send_callback(unsigned int flow)
     {
       using std::placeholders::_1;
@@ -324,6 +324,11 @@ namespace dsaam
       return _time;
     }
 
+    const Time & nextAt()
+    {
+      return std::move(inflows.nextTime());
+    }
+
     const Time & dt()
     {
       return _dt;
@@ -365,6 +370,44 @@ namespace dsaam
     MessageFlowMultiplexer<mpointer> inflows;
     std::deque<OutMessageFlow<mpointer>> outflows;  
   };
-    
+
+  class OneThreadNode : public Node
+{
+public:
+  OneThreadNode(string &name, Time &time, Time &dt, std::list<InFlow> &inflows,
+	 std::list<OutFlow> &outflows, unsigned int max_qsize)
+    : Node(name,time,dt,inflows,outflows,max_qsize), stopped(false),
+      _thread(&OneThreadNode::run, this){} 
+
+
+  void stop()
+  {
+    stopped = true;
+  }
+
+  void join()
+  {
+    _thread.join();
+  }
+  
+  void run()
+  {
+    init();
+    Time t = time() + dt();
+    while (!stopped)
+      {
+	next();
+	if(t >= nextAt()) step(t);
+	t = t + dt();
+      }
+  }
+
+  virtual void init() = 0;
+
+private:
+  bool stopped;
+  std::thread _thread;
+};
+
 }
 #endif //DSAAM_NODE_HPP

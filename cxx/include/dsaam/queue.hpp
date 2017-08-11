@@ -1,10 +1,12 @@
 #ifndef DSAAM_QUEUE_HPP
 #define DSAAM_QUEUE_HPP
+
 #include <mutex>
 #include <condition_variable>
 #include <vector>
 #include <type_traits>
 #include <dsaam/exceptions.hpp>
+#include <dsaam/string_utils.hpp>
 
 namespace dsaam
 {
