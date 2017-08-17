@@ -75,7 +75,7 @@ namespace dsaam
 
   std::ostream& operator<<(std::ostream& os, const Time& right)
   {
-    return os << "Time(sec=" << right.sec << ", nanos=" << right.nanos << ")";
+    return os << right.sec << ":" << right.nanos;
   }
   
 }
