@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <dsaam/exceptions.hpp>
 #include <dsaam/string_utils.hpp>
+#include <iostream>
 
 namespace dsaam
 {
@@ -30,7 +31,7 @@ namespace dsaam
       
       inline void operator()(int value)
       {
-	logic_except(value <= bound,
+	logic_assert(value <= bound,
 		     to_string("Bounded semaphore has exceeded bounds ",value,">",bound));
       }
       unsigned int bound;
@@ -80,14 +81,19 @@ namespace dsaam
   public:
     Queue(unsigned int max_size)
       : max_size(max_size), head(0), tail(0), n_full_to_pop(0), n_free_to_push(max_size),
-	buffer(max_size) {}
+	buffer(max_size)
+    {
+      if(max_size == 0) throw  std::length_error("Queue min size is 1");
+      std::cout << "Queue::Queue(" << this << ", max_size=" << max_size << ")" << std::endl;
+    }
 
-    ~Queue() {}
+    ~Queue() {std::cout << "Queue::~Queue(" << this << ", max_size=" << max_size << ")" << std::endl; }
+ 
 
     void push(M &&e)
     {
       n_free_to_push.decrease();//blocking
-      buffer[tail] = std::move(e);
+      buffer[tail] = std::forward<M>(e);
       tail = (tail + 1) % max_size;
       n_full_to_pop.increase();
     }

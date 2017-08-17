@@ -56,6 +56,8 @@ norm(const T& a, int b)
 
 typedef struct Body
 {
+  Body() = default;
+  
   Body(string name, Array2d & p0, Array2d & v0, double mass, double radius, string color)
     : name(name), p(p0), v(v0), mass(mass), radius(radius), color(color)
   {}
@@ -96,22 +98,138 @@ typedef struct Body
 class OneBodySystem
 {
 public:
-  OneBodySystem(const string &name, const std::vector<Body>& all_bodies)
+
+  class PMessage : public dsaam::MessageBase
+  {
+  public:
+    PMessage(const Array2d & p, const dsaam::Time & t)
+      : MessageBase(t), p(p) {}
+  public:
+    Array2d p;
+  };
+
+  class VMessage : public dsaam::MessageBase
+  {
+  public:
+    VMessage(const Array2d & v, const dsaam::Time & t)
+      : MessageBase(t), _filler_("filler"), v(v) {}
+  public:
+    string _filler_;
+    Array2d v;
+  };
+
+
+  OneBodySystem(const string &name, const std::vector<Body>& all_bodies, const dsaam::Time & dt)
+    : dt(dt)
   {
     for(auto b : all_bodies)
       {
 	if (b.name != name) bodies.push_back(b);
+	else _self = b;
       }
   }
+
+  void pCallback(const dsaam::Node::mpointer & pm, const dsaam::Time &)
+  {
+    auto pmp = static_cast<const PMessage *>(pm.get());
+    _self.p = pmp->p;
+  }
+  
+  void vCallback(const dsaam::Node::mpointer & pm,  const dsaam::Time &)
+  {
+    auto pmv = static_cast<const VMessage *>(pm.get());
+    _self.v = pmv->v;
+  }
+
+  void integrate(const dsaam::Time & dt)
+  {
+    _self.integrate(bodies, double(dt));
+  }
+
+  const Body & self()
+  {
+    return _self;
+  }
+  
 private:
+  Body _self;
+  const dsaam::Time dt; 
   std::vector<Body> bodies;
+};
+
+class OneBSystemNode : public dsaam::OneThreadNode
+{
+public:
+  OneBSystemNode(std::vector<Body> & bodies, string &name, dsaam::Time &time, dsaam::Time &dt,
+		 std::vector<dsaam::InFlow> &inflows, std::vector<dsaam::OutFlow> &outflows,
+		 unsigned int max_qsize,
+		 const dsaam::Time &stop_time)
+    : OneThreadNode(name,time,dt,inflows,outflows,max_qsize), system(name, bodies, time),
+      stop_time(stop_time)
+  {
+    send_p = send_callback(name + "/position");
+    send_v = send_callback(name + "/speed");
+  }
+
+  virtual void init()
+  {
+    //send init position and speed
+    send_state(time());
+  }
+
+  virtual void step(const dsaam::Time & to)
+  {
+    system.integrate(to - time());
+    //send updated position and speed
+    send_state(to);
+    if(to + dt() > stop_time) stop();
+
+  }
+
+  dsaam::message_callback_type pCallback()
+  {
+    return std::bind(&OneBodySystem::pCallback, &system, std::placeholders::_1, std::placeholders::_2);
+  }
+
+   dsaam::message_callback_type vCallback()
+  {
+    return std::bind(&OneBodySystem::vCallback, &system, std::placeholders::_1, std::placeholders::_2);
+  }
+  
+private:
+  void send_state(dsaam::Time t)
+  {
+    dsaam::Node::mpointer m = \
+      dsaam::Node::mpointer(new OneBodySystem::PMessage(system.self().p, t));
+    send_p(std::move(m));
+    
+    m = dsaam::Node::mpointer(new OneBodySystem::VMessage(system.self().v, t));
+    send_v(std::move(m));
+  }
+
+  OneBodySystem system;
+  dsaam::Time stop_time;
+  dsaam::send_callback_type send_p;
+  dsaam::send_callback_type send_v;
 };
 
 int main()
 {
-  int n = 4;
+  string colors[] = {"red", "green", "blue", "yellow"};
 
+  unsigned int n = 4;
   string names[] = {"red_0", "green_0", "blue_0", "yellow_0"};
+  
+  std::vector<string> ins[] = {{"yellow_0"},
+			       {"red_0"},
+			       {"green_0"},
+			       {"red_0", "green_0", "blue_0"}};
+  
+  std::vector<string> outs[] = {{"green_0", "yellow_0"},
+				{"blue_0", "yellow_0"},
+				{"yellow_0"},
+				{"red_0"}};
+  
   
   Array2d positions[] = {{{0.5,  0.5}},
 		       {{0.3,  0.3}},
@@ -127,14 +245,91 @@ int main()
   
   double radii[] = {100., 10., 1., 0.1};
   
-  string colors[] = {"red", "green", "blue", "yellow"};
 
+  dsaam::Time start_time(0);
+  dsaam::Time dts[] = {{1}, {2}, {3}, {4}};
+
+  unsigned int max_qsize = 10;
   
+  //construct all bodies
   std::vector<Body> all_bodies;
-  for(int i=0; i<n; i++)
+  for(size_t i=0; i<n; i++)
     {
       all_bodies.push_back(Body(names[i], positions[i],
 				speeds[i], masses[i], radii[i], colors[i]));
     }
+
+  auto get_node_idx = [&](string name) -> size_t
+    {for(size_t i=0; i<n; i++) if (names[i] == name) return i;
+     throw std::domain_error(name);}; 
+  
+  //construct all Nodes
+  std::deque<OneBSystemNode> nodes;
+  for(size_t i=0; i<n; i++)
+    {
+      auto &b = all_bodies[i];
+      
+      std::vector<dsaam::InFlow> inflows;
+      for(size_t j=0; j < ins[i].size(); j++)
+	{
+	  string j_name = ins[i][j];
+	  size_t jdx = get_node_idx(j_name);
+	  inflows.emplace_back(j_name+"/position", dts[jdx]);
+	  inflows.emplace_back(j_name+"/speed", dts[jdx]);
+	}
+      
+      std::vector<dsaam::Sink> sinks;
+      for(size_t j=0; j < outs[i].size(); j++)
+	{
+	  string b_name = outs[i][j];
+	  sinks.emplace_back(b_name);
+	}
+      
+      std::vector<dsaam::OutFlow> outflows = {{b.name + "/position", dts[i], sinks},
+					      {b.name + "/speed", dts[i], sinks}};
+      nodes.emplace_back(all_bodies,
+			 names[i], start_time, dts[i],
+			 inflows, outflows,
+			 max_qsize, dsaam::Time(10));
+    }
+
+  auto get_node = [&](string name) -> OneBSystemNode&
+    {for(auto & n : nodes) if (n.name == name) return n;
+     throw std::domain_error(name);}; 
+	  
+
+  //link Nodes together
+   for(size_t i=0; i<n; i++)
+    {
+      auto &n = nodes[i];
+      auto bp = n.name + "/position";
+      auto bs = n.name + "/speed";
+      for(size_t j=0; j < ins[i].size(); j++)
+	{
+	  string j_name = ins[i][j];
+	  auto & nj = get_node(j_name);
+	  auto jp = j_name + "/position";
+	  auto js = j_name + "/speed";
+	  n.set_inflow_callbacks(jp, n.pCallback(), nj.time_callback(jp, n.name));
+	  n.set_inflow_callbacks(js, n.vCallback(), nj.time_callback(js, n.name));
+
+	}
+      std::vector<dsaam::Sink> sinks;
+      for(size_t j=0; j < outs[i].size(); j++)
+	{
+	  string j_name = outs[i][j];
+	  auto & nj = get_node(j_name);
+	  n.set_outflow_callback(bp, j_name, nj.push_callback(bp));
+	  n.set_outflow_callback(bs, j_name, nj.push_callback(bp));
+	}
+    }
+
+  //start Nodes
+  for(auto &n : nodes) n.start();
+
+  //wait for Nodes to stop
+  for(auto &n : nodes) n.join();
+
+  //stop
   return 0;
 }

@@ -7,8 +7,6 @@
 
 #include<string>
 #include<boost/heap/fibonacci_heap.hpp>
-#include<dsaam/time.hpp>
-#include<dsaam/queue.hpp>
 #include<vector>
 #include<deque>
 #include<list>
@@ -17,6 +15,10 @@
 #include<mutex>
 #include<exception>
 #include<thread>
+
+#include<dsaam/time.hpp>
+#include<dsaam/queue.hpp>
+#include<dsaam/exceptions.hpp>
 
 namespace dsaam
 {
@@ -30,36 +32,46 @@ namespace dsaam
     const Time time;
   };
 
-  typedef  void(*message_callback)(const std::shared_ptr<MessageBase const>, const Time &);
-  typedef  void(*send_callback)(const std::shared_ptr<MessageBase const>);
-  typedef  void(*time_callback)(const Time &);
+  typedef  std::function<void(const std::shared_ptr<MessageBase const>&, const Time &)>
+  message_callback_type;
+
+  typedef  std::function<void(const std::shared_ptr<MessageBase const> &)>
+  send_callback_type;
+
+  typedef  std::function<void(const Time &)>
+  time_callback_type;
+  
+  static const message_callback_type EMPTY_MESSAGE_CALLBACK;
+  static const send_callback_type EMPTY_SEND_CALLBACK;
+  static const time_callback_type EMPTY_TIME_CALLBACK;
   
   typedef struct InFlow
   {
     InFlow(string name, Time dt,
-	   message_callback &callback, time_callback &time_callback)
+	   const message_callback_type &callback = EMPTY_MESSAGE_CALLBACK,
+	   const time_callback_type &time_callback = EMPTY_TIME_CALLBACK)
       : name(name), dt(dt), callback(callback), time_callback(time_callback) {}
     string name;
     Time dt;
-    message_callback &callback;
-    time_callback &time_callback;
+    message_callback_type callback;
+    time_callback_type time_callback;
   } InFlow;
   
   typedef struct Sink
   {
-    Sink(string name, send_callback &send_callback)
+    Sink(string name, const send_callback_type &send_callback = EMPTY_SEND_CALLBACK)
       : name(name), send_callback(send_callback) {}
     string name;
-    send_callback &send_callback;
+    send_callback_type send_callback;
   } Sink;
 
   typedef struct OutFlow
   {
-    OutFlow(string name, Time dt, std::list<Sink> sinks)
+    OutFlow(string name, Time dt, std::vector<Sink> sinks)
       : name(name), dt(dt), sinks(sinks) {}
     string name;
     Time dt;
-    std::list<Sink> sinks;
+    std::vector<Sink> sinks;
   } OutFlow;
 
   template<class T>
@@ -72,7 +84,9 @@ namespace dsaam
     T && pop()
     {
       T && m = Queue<T>::pop();
-      assert(m->time == nextTime);
+      logic_assert(m->time == nextTime,
+		   to_string("Time contract breached : Invalid message time expected ",
+			     nextTime, " got ", m->time));
       nextTime = m->time + dt;
       return std::move(m);
     }
@@ -119,7 +133,7 @@ namespace dsaam
 
 
   public:
-    MessageFlowMultiplexer(std::list<InFlow> &inflows, const Time &time, unsigned int max_qsize):
+    MessageFlowMultiplexer(std::vector<InFlow> &inflows, const Time &time, unsigned int max_qsize):
       inflows(inflows), time(time), max_qsize(max_qsize), mqalloc(), heap()
     {
       this->queues = MQAllocTraits::allocate(mqalloc, inflows.size());
@@ -156,9 +170,10 @@ namespace dsaam
  
     }
   
-    void push(unsigned int flow_index, T && message)
+    void push(unsigned int flow_index, const T & message)
     {
-      queues[flow_index].push(std::move(message));
+      T m = message;
+      queues[flow_index].push(std::move(m));
     }
 
     void next()
@@ -174,9 +189,18 @@ namespace dsaam
     {
       return heap.top().queue.nextAt();
     }
+
+    void set_flow_callbacks(unsigned int fidx,
+			    const ::dsaam::message_callback_type &m_cb,
+			    const ::dsaam::time_callback_type &t_cb)
+    {
+      inflows[fidx].callback = m_cb;
+      inflows[fidx].time_callback = t_cb;
+
+    }
     
   public:
-    std::list<InFlow> inflows;
+    std::vector<InFlow> inflows;
     Time time;
     unsigned int max_qsize;
     MQAllocType mqalloc;
@@ -191,11 +215,17 @@ namespace dsaam
   {
     typedef boost::heap::fibonacci_heap<unsigned int> heap_type;
   public:
-    OutMessageFlow(string name, Time start_time, Time dt, std::list<Sink> &sinks,
+    OutMessageFlow(string name, Time start_time, Time dt, std::vector<Sink> &sinks,
 		   unsigned int max_qsize)
-      :  name(name), max_qsize(max_qsize), time(start_time), dt(dt), sinks(sinks),
-	 heap(), heap_handles() {}
-
+      :  name(name), max_qsize(max_qsize), next_time(start_time), dt(dt), sinks(sinks),
+	 heap(), heap_handles()
+    {
+      for(auto s : sinks)
+	{
+	  typename heap_type::handle_type h = heap.push(max_qsize);
+	  heap_handles.push_back(h);
+	}
+    }
 
     unsigned int subscriber_index(const string & name)
     {
@@ -225,34 +255,43 @@ namespace dsaam
 	cv.notify_one();
     }
     
-    void send(T message)
+    void send(const T & message)
     {
-      assert(message->time == time + dt);
-
+      logic_assert(message->time == next_time,
+         to_string("Time contract breached : Invalid message time expected ",
+         time, " got ", message->time));
+    
       std::unique_lock<std::mutex> lk(m);
       cv.wait(lk, [this]{return heap.top() > 0;});
       
       unsigned int index = 0;
       for(Sink s : sinks)
-	{
-	  if(s.send_callback != nullptr) s.send_callback(message);
-	  typename heap_type::handle_type h=heap_handles[index++];
-	  (*h) += 1;
-	  heap.update(h);
-	}
+       {
+         if(s.send_callback != nullptr) s.send_callback(message);
+         typename heap_type::handle_type h=heap_handles[index++];
+         (*h) += 1;
+         heap.update(h);
+       }
 
       lk.unlock();
       cv.notify_one();
-    }
+
+      next_time  = next_time + dt;
+   }
+
+      void set_sink_callback(unsigned int sink_idx, const ::dsaam::send_callback_type & cb)
+    {
+    sinks[sink_idx].send_callback = cb;
+  }
 
   public:
     const string name;
 
   private:
     unsigned int max_qsize;
-    Time time;
+    Time next_time;
     Time dt;
-    std::list<Sink> sinks;
+    std::vector<Sink> sinks;
     heap_type heap;
     std::vector<heap_type::handle_type> heap_handles;
     std::mutex m;
@@ -261,13 +300,16 @@ namespace dsaam
 
   class Node
   {
-    typedef std::shared_ptr<class MessageBase> mpointer;
-  public:      
-    Node(string &name, Time &time, Time &dt, std::list<InFlow> &inflows,
-	 std::list<OutFlow> &outflows, unsigned int max_qsize) :
+  public:
+    typedef std::shared_ptr<class MessageBase const > mpointer;
+    typedef std::function<void(const mpointer &)> push_callback_type;
+
+    Node(string &name, Time &time, Time &dt, std::vector<InFlow> &inflows,
+	 std::vector<OutFlow> &outflows, unsigned int max_qsize) :
       name(name), _time(time), _dt(dt),
       inflows(inflows, time, max_qsize), outflows()
     {
+      std::cout << "Node::Node(" << this << ", name=" << name << ")" << std::endl;
       for(OutFlow flow : outflows)
 	{
 	  this->outflows.emplace_back(flow.name, _time, flow.dt,
@@ -275,47 +317,50 @@ namespace dsaam
 	}
     }
 
+    ~Node(){std::cout << "Node::~Node(" << this << ", name=" << name << ")" << std::endl;}
+
     void next()
     {
       this->inflows.next();
     }
 
-    std::function<void (mpointer)> send_callback(unsigned int flow)
+    ::dsaam::send_callback_type send_callback(unsigned int flow)
     {
       using std::placeholders::_1;
       return std::bind(&Node::_send, this, &outflows[flow], _1);
     }
     
-    std::function<void (mpointer)> send_callback(const string & flow)
+    ::dsaam::send_callback_type send_callback(const string & flow)
     {
       return send_callback(_out_flow_index(flow));
     }
 
-    std::function<void (const Time &)> time_callback(unsigned int flow, unsigned int sink)
+    ::dsaam::time_callback_type time_callback(unsigned int flow, unsigned int sink)
     {
       using std::placeholders::_1;
       return std::bind(&OutMessageFlow<mpointer>::time_callback, &outflows[flow], sink, _1);
     }
 
-    std::function<void (const Time &)> time_callback(const string &flow, const string &sink)
+    ::dsaam::time_callback_type time_callback(const string &flow, const string &sink)
     {
       unsigned int iflow = _out_flow_index(flow);
       return time_callback(iflow, _out_flow_sink_index(iflow, sink));
     }
-    std::function<void (mpointer)> message_callback(unsigned int flow)
+    push_callback_type push_callback(unsigned int flow)
     {
       using std::placeholders::_1;
-      return std::bind(&MessageFlowMultiplexer<mpointer>::push, inflows, flow, _1);
+      return std::bind(&MessageFlowMultiplexer<mpointer>::push, &inflows, flow, _1);
     }
 
-    std::function<void (mpointer)> message_callback(const string &flow)
+    push_callback_type push_callback(const string &flow)
     {
-      return message_callback(_in_flow_index(flow));
+      return push_callback(_in_flow_index(flow));
     }
 
-    void step(const Time & t)
+    void stepTime(const Time & t)
     {
-      assert(t >= _time);
+      logic_assert(t >= _time,
+		   to_string("Time contract breached, stepping back in time from ",_time," to ",t));
       _time = t;
     }
 
@@ -334,12 +379,31 @@ namespace dsaam
       return _dt;
     }
 
+    void set_inflow_callbacks(const string & ifname,
+			      const ::dsaam::message_callback_type &m_cb,
+			      const ::dsaam::time_callback_type &t_cb)
+    {
+      inflows.set_flow_callbacks(_in_flow_index(ifname), m_cb, t_cb);
+    }
+
+    void set_outflow_callback(const string & ofname,
+			      const string & sinkname,
+			      const ::dsaam::send_callback_type &cb)
+    {
+      unsigned int odx = _out_flow_index(ofname);
+      outflows[odx].set_sink_callback(_out_flow_sink_index(odx, sinkname), cb);
+    }
+
   private:
 
-    void _send(OutMessageFlow<mpointer> * outflow, mpointer m)
+    void _send(OutMessageFlow<mpointer> * outflow, const mpointer & m)
     {
-      assert(m->time >= time());
-      assert(m->time <= inflows.nextTime());
+      logic_assert(m->time >= time(),
+		   to_string("Time contract breached : sending message with time ", m->time,
+			     " in the future  (current time is ", time()));
+      logic_assert(m->time <= inflows.nextTime(),
+		   to_string("Time contract breached: sending message at ",
+			     m->time, " before arrival of next message at ", inflows.nextTime()));
       outflow->send(m);
     }
       
@@ -374,12 +438,17 @@ namespace dsaam
   class OneThreadNode : public Node
 {
 public:
-  OneThreadNode(string &name, Time &time, Time &dt, std::list<InFlow> &inflows,
-	 std::list<OutFlow> &outflows, unsigned int max_qsize)
+  OneThreadNode(string &name, Time &time, Time &dt, std::vector<InFlow> &inflows,
+	 std::vector<OutFlow> &outflows, unsigned int max_qsize)
     : Node(name,time,dt,inflows,outflows,max_qsize), stopped(false),
-      _thread(&OneThreadNode::run, this){} 
+      _thread() {} 
 
 
+  void start()
+  {
+    if(!_thread.joinable()) _thread = std::thread(&OneThreadNode::run, this);
+  }
+  
   void stop()
   {
     stopped = true;
@@ -389,7 +458,12 @@ public:
   {
     _thread.join();
   }
-  
+
+  virtual void init() = 0;
+
+  virtual void step(const Time &) = 0;
+
+private:
   void run()
   {
     init();
@@ -397,12 +471,9 @@ public:
     while (!stopped)
       {
 	next();
-	if(t >= nextAt()) step(t);
-	t = t + dt();
+	while(t <= nextAt()) { step(t); stepTime(t); t = t + dt(); }
       }
   }
-
-  virtual void init() = 0;
 
 private:
   bool stopped;

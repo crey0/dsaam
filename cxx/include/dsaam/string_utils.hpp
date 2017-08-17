@@ -2,6 +2,7 @@
 #define DSAAM_STRING_UTILS
 
 #include<string>
+#include<sstream>
 
 namespace dsaam
 {
@@ -10,6 +11,19 @@ namespace dsaam
   string to_string()
   {
     return "";
+  }
+
+  string to_string(const string & s)
+  {
+    return s;
+  }
+
+  template <typename T>
+  string to_string(const T& object)
+  {
+    std::ostringstream ss;
+    ss << object;
+    return ss.str();
   }
   
   template<class... Args>
