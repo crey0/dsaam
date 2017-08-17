@@ -4,6 +4,7 @@ Nbody test
 
  ***/
 #include <dsaam/node.hpp>
+#include <dsaam/string_utils.hpp>
 #include <string>
 #include <vector>
 #include <cmath>
@@ -12,8 +13,8 @@ Nbody test
 #define EPS 1e-3
 #define G 1.5 * 1.80 * 1e-11
 #define C 8 * 1e-3
-typedef std::string string;
 
+typedef std::string string;
 typedef std::array<double, 2>  Array2d;
 
 Array2d operator+(const Array2d &l, const Array2d &r) { return {{l[0]+r[0], l[1]+r[1]}};}
@@ -129,16 +130,22 @@ public:
       }
   }
 
-  void pCallback(const dsaam::Node::mpointer & pm, const dsaam::Time &)
+  void pCallback(Body &b, const dsaam::Node::mpointer & pm, const dsaam::Time &nextAt)
   {
     auto pmp = static_cast<const PMessage *>(pm.get());
-    _self.p = pmp->p;
+    std::cout << dsaam::to_string("[", pmp->time, "]", "[",_self.name,"] pos update of ", b.name,
+				  " next at ",nextAt)
+	      << std::endl;
+    b.p = pmp->p;
   }
   
-  void vCallback(const dsaam::Node::mpointer & pm,  const dsaam::Time &)
+  void vCallback(Body & b, const dsaam::Node::mpointer & pm,  const dsaam::Time &nextAt)
   {
     auto pmv = static_cast<const VMessage *>(pm.get());
-    _self.v = pmv->v;
+    std::cout << dsaam::to_string("[", pmv->time, "]", "[",_self.name,"] spe update of ", b.name,
+				  " next at ",nextAt)
+	      << std::endl;
+    b.v = pmv->v;
   }
 
   void integrate(const dsaam::Time & dt)
@@ -149,6 +156,12 @@ public:
   const Body & self()
   {
     return _self;
+  }
+
+  Body& get_body(const string &name)
+  {
+    for(auto &b : bodies) if (b.name == name) return b;
+    throw std::domain_error(name);
   }
   
 private:
@@ -186,19 +199,25 @@ public:
 
   }
 
-  dsaam::message_callback_type pCallback()
+  dsaam::message_callback_type pCallback(const string &b_name)
   {
-    return std::bind(&OneBodySystem::pCallback, &system, std::placeholders::_1, std::placeholders::_2);
+    Body & b = system.get_body(b_name);
+    return std::bind(&OneBodySystem::pCallback, &system, b,
+		     std::placeholders::_1, std::placeholders::_2);
   }
 
-   dsaam::message_callback_type vCallback()
+   dsaam::message_callback_type vCallback(const string &b_name)
   {
-    return std::bind(&OneBodySystem::vCallback, &system, std::placeholders::_1, std::placeholders::_2);
+    Body & b = system.get_body(b_name);
+    return std::bind(&OneBodySystem::vCallback, &system, b,
+		     std::placeholders::_1, std::placeholders::_2);
   }
   
 private:
   void send_state(dsaam::Time t)
   {
+    std::cout<< to_string("[",t,"]","[",name,"] Sending state") << std::endl;
+
     dsaam::Node::mpointer m = \
       dsaam::Node::mpointer(new OneBodySystem::PMessage(system.self().p, t));
     send_p(std::move(m));
@@ -310,8 +329,8 @@ int main()
 	  auto & nj = get_node(j_name);
 	  auto jp = j_name + "/position";
 	  auto js = j_name + "/speed";
-	  n.set_inflow_callbacks(jp, n.pCallback(), nj.time_callback(jp, n.name));
-	  n.set_inflow_callbacks(js, n.vCallback(), nj.time_callback(js, n.name));
+	  n.set_inflow_callbacks(jp, n.pCallback(j_name), nj.time_callback(jp, n.name));
+	  n.set_inflow_callbacks(js, n.vCallback(j_name), nj.time_callback(js, n.name));
 
 	}
       std::vector<dsaam::Sink> sinks;
