@@ -6,7 +6,8 @@
 #define DSAAM_NODE_HPP
 
 #include<string>
-#include<boost/heap/fibonacci_heap.hpp>
+#include<boost/heap/binomial_heap.hpp>
+//#include<boost/heap/fibonacci_heap.hpp>
 #include<vector>
 #include<deque>
 #include<list>
@@ -114,7 +115,7 @@ namespace dsaam
   {
        
     class heap_data;
-    typedef  boost::heap::fibonacci_heap<heap_data,
+    typedef  boost::heap::binomial_heap<heap_data,
 					 boost::heap::compare<std::greater<heap_data>>> heap_type;
     typedef std::allocator<MessageQueue<T>> MQAllocType;
     typedef std::allocator_traits<MQAllocType> MQAllocTraits;
@@ -219,7 +220,20 @@ namespace dsaam
   template<class T>
   class OutMessageFlow
   {
-    typedef boost::heap::fibonacci_heap<unsigned int> heap_type;
+    struct heap_data;
+    typedef boost::heap::binomial_heap<struct heap_data> heap_type;
+    typedef struct heap_data
+    {
+      heap_data(unsigned int v = 0) : v(v) {}
+      bool operator>(const heap_data& r) const { return v > r.v;}
+      bool operator<(const heap_data& r) const { return v < r.v;}
+      
+      unsigned int v;
+      typename heap_type::handle_type h;
+    }heap_data;
+
+    
+    
   public:
     OutMessageFlow(string name, Time start_time, Time dt, std::vector<Sink> &sinks,
 		   unsigned int max_qsize)
@@ -228,7 +242,7 @@ namespace dsaam
     {
       for(auto s : sinks)
 	{
-	  typename heap_type::handle_type h = heap.push(max_qsize);
+	  typename heap_type::handle_type h = heap.emplace(0);
 	  heap_handles.push_back(h);
 	}
     }
@@ -253,11 +267,11 @@ namespace dsaam
 	std::lock_guard<std::mutex>(this->m);
       
 	typename heap_type::handle_type h = heap_handles[subscriber];
-	*h -= 1;
+	(*h).v -= 1;
 	heap.update(h);
-	top = heap.top();
+	top = heap.top().v;
       }
-      if (top<max_qsize)
+      if (top < max_qsize)
 	cv.notify_one();
     }
     
@@ -268,14 +282,14 @@ namespace dsaam
          time, " got ", message->time));
     
       std::unique_lock<std::mutex> lk(m);
-      cv.wait(lk, [this]{return heap.top() > 0;});
+      cv.wait(lk, [this]{return heap.top().v < max_qsize;});
       
       unsigned int index = 0;
       for(Sink s : sinks)
        {
          if(s.send_callback != nullptr) s.send_callback(message);
          typename heap_type::handle_type h=heap_handles[index++];
-         (*h) += 1;
+         (*h).v += 1;
          heap.update(h);
        }
 
@@ -299,7 +313,7 @@ namespace dsaam
     Time dt;
     std::vector<Sink> sinks;
     heap_type heap;
-    std::vector<heap_type::handle_type> heap_handles;
+    std::vector<typename heap_type::handle_type> heap_handles;
     std::mutex m;
     std::condition_variable cv;
   };
@@ -478,7 +492,7 @@ private:
       {
 	next();
 	//std::cout << to_string("[",time(),"] [",name,"] nextAt=", nextAt(), " TEST STEP to t=",t) << std::endl;
-	while(t <= nextAt()) {
+	while(t <= nextAt() && !stopped) {
 	  //std::cout << to_string("[",time(),"] [",name,"] nextAt=", nextAt(), " STEPPING to t=",t) << std::endl;
 	  step(t); stepTime(t); t = t + dt(); }
       }
