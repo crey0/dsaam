@@ -8,7 +8,7 @@
 
 namespace dsaam
 {
-  typedef std::string string;
+  //  typedef std::string string;
 
 // inline void logic_except(bool test, const string & error)
 //   {

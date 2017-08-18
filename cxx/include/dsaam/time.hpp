@@ -5,13 +5,16 @@
 namespace dsaam
 {
 
-  typedef long long int integer;
 
-  integer NS_IN_SECOND = 1000000000;
-  double  SECOND_IN_NS = 1e-9;
+  
 
   class Time
   {
+  public:
+    typedef long long int integer;
+    static const constexpr integer NS_IN_SECOND = 1000000000;
+    static const constexpr double  SECOND_IN_NS = 1e-9;
+
   public:
     
     Time(integer sec=0, integer nanos=0)
@@ -22,13 +25,13 @@ namespace dsaam
 
     Time(const Time &) = default;
 
-    void operator=(const Time& other)
+    inline void operator=(const Time& other)
     {
       sec = other.sec;
       nanos = other.nanos;
     }
 
-    explicit operator double() const 
+    explicit inline operator double() const 
     {
       return double(sec) + SECOND_IN_NS * double(nanos);
     }
@@ -38,42 +41,44 @@ namespace dsaam
     integer nanos;
   };
 
-  Time operator+(const Time &left, const Time &right)
+  inline Time operator+(const Time &left, const Time &right)
   {
-    integer nanos = left.nanos % NS_IN_SECOND + right.nanos;
-    integer carry = nanos / NS_IN_SECOND + left.nanos / NS_IN_SECOND + right.nanos / NS_IN_SECOND;
-    return Time(left.sec + right.sec + carry, nanos % NS_IN_SECOND);
+    Time::integer nanos = left.nanos % Time::NS_IN_SECOND + right.nanos;
+    Time::integer carry = nanos / Time::NS_IN_SECOND + left.nanos / Time::NS_IN_SECOND \
+	    + right.nanos / Time::NS_IN_SECOND;
+    return Time(left.sec + right.sec + carry, nanos % Time::NS_IN_SECOND);
   }
-  Time operator-(const Time &left, const Time &right)
+  inline Time operator-(const Time &left, const Time &right)
   {
-    integer nanos = left.nanos % NS_IN_SECOND - right.nanos;
-    integer carry = nanos / NS_IN_SECOND + left.nanos / NS_IN_SECOND - right.nanos / NS_IN_SECOND;
-    return Time(left.sec - right.sec + carry, nanos % NS_IN_SECOND);
+    Time::integer nanos = left.nanos % Time::NS_IN_SECOND - right.nanos;
+    Time::integer carry = nanos / Time::NS_IN_SECOND + left.nanos / Time::NS_IN_SECOND\
+      - right.nanos / Time::NS_IN_SECOND;
+    return Time(left.sec - right.sec + carry, nanos % Time::NS_IN_SECOND);
   }
-  Time operator*(const Time &left, integer right)
+  inline Time operator*(const Time &left, Time::integer right)
   {
-    integer nanos = left.nanos % NS_IN_SECOND * right;
-    integer carry = nanos / NS_IN_SECOND + left.nanos / NS_IN_SECOND;
-    return Time(left.sec * right + carry, nanos % NS_IN_SECOND);
+    Time::integer nanos = left.nanos % Time::NS_IN_SECOND * right;
+    Time::integer carry = nanos / Time::NS_IN_SECOND + left.nanos / Time::NS_IN_SECOND;
+    return Time(left.sec * right + carry, nanos % Time::NS_IN_SECOND);
   }
-  Time operator+(integer left, const Time &right){ return right + left; }
-  Time operator*(integer left, const Time &right){ return right * left; }
+  inline Time operator+(Time::integer left, const Time &right){ return right + left; }
+  inline Time operator*(Time::integer left, const Time &right){ return right * left; }
 
-  bool operator<(const Time &left, const Time &right)
+  inline bool operator<(const Time &left, const Time &right)
   {
     return left.sec < right.sec || (left.sec == right.sec && left.nanos < right.nanos);
   }
-  bool operator>(const Time &left, const Time &right){ return right < left; }
-  bool operator<=(const Time &left, const Time &right){ return !(left > right); }
-  bool operator>=(const Time &left, const Time &right){ return !(left < right); }
+  inline bool operator>(const Time &left, const Time &right){ return right < left; }
+  inline bool operator<=(const Time &left, const Time &right){ return !(left > right); }
+  inline bool operator>=(const Time &left, const Time &right){ return !(left < right); }
 
-  bool operator==(const Time &left, const Time &right)
+  inline bool operator==(const Time &left, const Time &right)
   {
     return left.sec == right.sec && left.nanos == right.nanos;
   }
-  bool operator!=(const Time &left, const Time &right){ return !(left == right); }
+  inline bool operator!=(const Time &left, const Time &right){ return !(left == right); }
 
-  std::ostream& operator<<(std::ostream& os, const Time& right)
+  inline std::ostream& operator<<(std::ostream& os, const Time& right)
   {
     return os << right.sec << ":" << right.nanos;
   }
