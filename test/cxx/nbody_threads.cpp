@@ -192,6 +192,7 @@ public:
 
   virtual void step(const dsaam::Time & to)
   {
+    std::cout << to_string("[",time(),"] [",name,"] Stepping to ",to) << std::endl;
     system.integrate(to - time());
     //send updated position and speed
     send_state(to);
@@ -221,8 +222,9 @@ private:
     dsaam::Node::mpointer m = \
       dsaam::Node::mpointer(new OneBodySystem::PMessage(system.self().p, t));
     send_p(std::move(m));
+     
     
-    m = dsaam::Node::mpointer(new OneBodySystem::VMessage(system.self().v, t));
+    m =  dsaam::Node::mpointer(new OneBodySystem::VMessage(system.self().v, t));
     send_v(std::move(m));
   }
 
@@ -339,7 +341,7 @@ int main()
 	  string j_name = outs[i][j];
 	  auto & nj = get_node(j_name);
 	  n.set_outflow_callback(bp, j_name, nj.push_callback(bp));
-	  n.set_outflow_callback(bs, j_name, nj.push_callback(bp));
+	  n.set_outflow_callback(bs, j_name, nj.push_callback(bs));
 	}
     }
 

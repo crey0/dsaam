@@ -87,7 +87,7 @@ namespace dsaam
       logic_assert(m->time == nextTime,
 		   to_string("Time contract breached : Invalid message time expected ",
 			     nextTime, " got ", m->time));
-      nextTime = m->time + dt;
+      nextTime = nextTime + dt;
       return std::move(m);
     }
 
@@ -102,11 +102,11 @@ namespace dsaam
   };
 
   template<typename T>
-  bool operator<(const MessageQueue<T> &l, const MessageQueue<T> &r)
+  inline bool operator<(const MessageQueue<T> &l, const MessageQueue<T> &r)
   { return l.nextAt() < r.nextAt();}
 
   template<typename T>
-  bool operator>(const MessageQueue<T> &l, const MessageQueue<T> &r)
+  inline bool operator>(const MessageQueue<T> &l, const MessageQueue<T> &r)
   { return r < l;}
   
   template<class T>
@@ -158,7 +158,7 @@ namespace dsaam
       MQAllocTraits::deallocate(mqalloc, queues, inflows.size());
     }
 
-    unsigned int flow_index(const string & name)
+    unsigned int flow_index(const string & name) const
     {
       unsigned int i = 0;
       for(auto s : inflows)
@@ -173,21 +173,27 @@ namespace dsaam
     void push(unsigned int flow_index, const T & message)
     {
       T m = message;
+      //std::cout << to_string("[",std::this_thread::get_id(),"] pushing on flow ",flow_index,
+      //			     "/",&queues[flow_index], "\n");
       queues[flow_index].push(std::move(m));
     }
 
     void next()
     {
       heap_data & q = const_cast<heap_data &>(heap.top());
+      //std::cout << to_string("[",std::this_thread::get_id(),"] [",time,"] popping on queue ",q.flow.name,"\n");
       auto m = q.queue.pop();
       heap.update(q.handle);
       q.flow.time_callback(nextTime());
       q.flow.callback(std::move(m), nextTime());
     }
 
-    Time nextTime()
+    const Time & nextTime() const
     {
-      return heap.top().queue.nextAt();
+      auto & q = heap.top();
+      //std::cout << to_string("[",time,"] next message InFlow ",q.flow.name, " at ", q.queue.nextAt(), "\n");
+   
+      return q.queue.nextAt();
     }
 
     void set_flow_callbacks(unsigned int fidx,
@@ -227,7 +233,7 @@ namespace dsaam
 	}
     }
 
-    unsigned int subscriber_index(const string & name)
+    unsigned int subscriber_index(const string & name) const
     {
       unsigned int i = 0;
       for(auto s : sinks)
@@ -279,10 +285,10 @@ namespace dsaam
       next_time  = next_time + dt;
    }
 
-      void set_sink_callback(unsigned int sink_idx, const ::dsaam::send_callback_type & cb)
+    void set_sink_callback(unsigned int sink_idx, const ::dsaam::send_callback_type & cb)
     {
-    sinks[sink_idx].send_callback = cb;
-  }
+      sinks[sink_idx].send_callback = cb;
+    }
 
   public:
     const string name;
@@ -364,17 +370,17 @@ namespace dsaam
       _time = t;
     }
 
-    const Time & time()
+    const Time & time() const
     {
       return _time;
     }
 
-    const Time & nextAt()
+    const Time & nextAt() const
     {
-      return std::move(inflows.nextTime());
+      return inflows.nextTime();
     }
 
-    const Time & dt()
+    const Time & dt() const
     {
       return _dt;
     }
@@ -407,7 +413,7 @@ namespace dsaam
       outflow->send(m);
     }
       
-    unsigned int _out_flow_index(const string & name)
+    unsigned int _out_flow_index(const string & name) const
     {
       for(unsigned int i=0; i<outflows.size(); i++)
 	{
@@ -416,7 +422,7 @@ namespace dsaam
       throw  std::domain_error("No outflow "+name+" defined on this node");
     }
 
-    unsigned int _out_flow_sink_index(unsigned int flow, const string & name)
+    unsigned int _out_flow_sink_index(unsigned int flow, const string & name) const
     {
       return outflows[flow].subscriber_index(name);
     }
@@ -471,7 +477,10 @@ private:
     while (!stopped)
       {
 	next();
-	while(t <= nextAt()) { step(t); stepTime(t); t = t + dt(); }
+	//std::cout << to_string("[",time(),"] [",name,"] nextAt=", nextAt(), " TEST STEP to t=",t) << std::endl;
+	while(t <= nextAt()) {
+	  //std::cout << to_string("[",time(),"] [",name,"] nextAt=", nextAt(), " STEPPING to t=",t) << std::endl;
+	  step(t); stepTime(t); t = t + dt(); }
       }
   }
 

@@ -63,6 +63,11 @@ namespace dsaam
       lk.unlock();
       cv.notify_one();
     }
+
+    unsigned int count()
+    {
+      return tokens;
+    }
     
   private:    
     unsigned int tokens;
@@ -93,6 +98,7 @@ namespace dsaam
     void push(M &&e)
     {
       n_free_to_push.decrease();//blocking
+      std::cout << to_string("[",std::this_thread::get_id(),"] Queue::push(",this,") idx=",tail,"\n");
       buffer[tail] = std::forward<M>(e);
       tail = (tail + 1) % max_size;
       n_full_to_pop.increase();
@@ -101,8 +107,10 @@ namespace dsaam
     M&& pop()
     {
       n_full_to_pop.decrease();//blocking
+      std::cout << to_string("[",std::this_thread::get_id(),"] Queue::pop(",this,") idx=",head,"\n");
+
       M && e = std::move(buffer[head]);
-      head = (head - 1) % max_size;
+      head = (head + 1) % max_size;
       n_free_to_push.increase();
       return std::move(e);
     }
