@@ -311,7 +311,7 @@ int main()
       nodes.emplace_back(all_bodies,
 			 names[i], start_time, dts[i],
 			 inflows, outflows,
-			 max_qsize, dsaam::Time(10));
+			 max_qsize, dsaam::Time(1000));
     }
 
   auto get_node = [&](string name) -> OneBSystemNode&

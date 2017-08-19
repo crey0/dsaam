@@ -6,7 +6,7 @@
 #define DSAAM_NODE_HPP
 
 #include<string>
-#include<boost/heap/binomial_heap.hpp>
+//#include<boost/heap/binomial_heap.hpp>
 //#include<boost/heap/fibonacci_heap.hpp>
 #include<vector>
 #include<deque>
@@ -20,6 +20,7 @@
 #include<dsaam/time.hpp>
 #include<dsaam/queue.hpp>
 #include<dsaam/exceptions.hpp>
+#include<dsaam/binary_heap.hpp>
 
 namespace dsaam
 {
@@ -115,8 +116,7 @@ namespace dsaam
   {
        
     class heap_data;
-    typedef  boost::heap::binomial_heap<heap_data,
-					 boost::heap::compare<std::greater<heap_data>>> heap_type;
+    typedef  binary_heap<heap_data, std::greater<heap_data>> heap_type;
     typedef std::allocator<MessageQueue<T>> MQAllocType;
     typedef std::allocator_traits<MQAllocType> MQAllocTraits;
     
@@ -145,7 +145,7 @@ namespace dsaam
 				   time, flow.dt, max_qsize);
 	  typename heap_type::handle_type h = heap.push(heap_data(flow,
 								  this->queues[index]));
-	  (*h).handle = h;
+	  (*h).value.handle = h;
 	  index++;
 	} 
     }
@@ -221,10 +221,11 @@ namespace dsaam
   class OutMessageFlow
   {
     struct heap_data;
-    typedef boost::heap::binomial_heap<struct heap_data> heap_type;
+    typedef binary_heap<struct heap_data> heap_type;
     typedef struct heap_data
     {
-      heap_data(unsigned int v = 0) : v(v) {}
+      heap_data(unsigned int v = 0) : v(v), h() {}
+      heap_data(unsigned int v, const typename heap_type::handle_type & h) : v(v), h(h) {}
       bool operator>(const heap_data& r) const { return v > r.v;}
       bool operator<(const heap_data& r) const { return v < r.v;}
       
@@ -242,8 +243,9 @@ namespace dsaam
     {
       for(auto s : sinks)
 	{
-	  typename heap_type::handle_type h = heap.emplace(0);
-	  heap_handles.push_back(h);
+	  typename heap_type::handle_type && h = heap.push(0);
+	  h->value.h = h;
+	  heap_handles.push_back(std::move(h));
 	}
     }
 
@@ -266,8 +268,8 @@ namespace dsaam
       {
 	std::lock_guard<std::mutex>(this->m);
       
-	typename heap_type::handle_type h = heap_handles[subscriber];
-	(*h).v -= 1;
+        typename heap_type::handle_type & h = heap_handles[subscriber];
+        h->value.v -= 1;
 	heap.update(h);
 	top = heap.top().v;
       }
@@ -288,8 +290,8 @@ namespace dsaam
       for(Sink s : sinks)
        {
          if(s.send_callback != nullptr) s.send_callback(message);
-         typename heap_type::handle_type h=heap_handles[index++];
-         (*h).v += 1;
+         typename heap_type::handle_type & h=heap_handles[index++];
+         h->value.v += 1;
          heap.update(h);
        }
 
@@ -496,6 +498,7 @@ private:
 	  //std::cout << to_string("[",time(),"] [",name,"] nextAt=", nextAt(), " STEPPING to t=",t) << std::endl;
 	  step(t); stepTime(t); t = t + dt(); }
       }
+   std::cout << to_string("[",time(),"] [",name,"] STOP \n");
   }
 
 private:
