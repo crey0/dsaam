@@ -48,17 +48,17 @@ namespace dsaam
 
     handle_type father(handle_type h)
     {
-      return heap_[(h->index - 1) / 2];
+      return heap_.at((h->index - 1) / 2);
     }
 
     handle_type left(handle_type h)
     {
-      return heap_[2 * h->index + 1];
+      return heap_.at(2 * h->index + 1);
     }
 
     handle_type right(handle_type h)
     {
-      return heap_[2 * h->index + 2];
+      return heap_.at(2 * h->index + 2);
     }
 
     size_t child_count(handle_type h)
@@ -85,8 +85,8 @@ namespace dsaam
       
     void swap_nodes(handle_type a, handle_type b)
     {
-      heap_[b->index] = a;
-      heap_[a->index] = b;
+      heap_.at(b->index) = a;
+      heap_.at(a->index) = b;
       size_t a_idx = a->index;
       a->index = b->index;
       b->index = a_idx;

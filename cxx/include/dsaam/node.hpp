@@ -243,9 +243,9 @@ namespace dsaam
     {
       for(auto s : sinks)
 	{
-	  typename heap_type::handle_type && h = heap.push(0);
+	  typename heap_type::handle_type h = heap.push(0);
 	  h->value.h = h;
-	  heap_handles.push_back(std::move(h));
+	  heap_handles.push_back(h);
 	}
     }
 
@@ -264,12 +264,13 @@ namespace dsaam
 
     void time_callback(unsigned int subscriber, const Time &)
     {
-      unsigned int top = max_qsize;
+      unsigned int top;
       {
-	std::lock_guard<std::mutex>(this->m);
+	std::lock_guard<std::mutex> lk(this->m);
       
         typename heap_type::handle_type & h = heap_handles[subscriber];
-        h->value.v -= 1;
+	assert(h->value.v > 0);
+	h->value.v -= 1;
 	heap.update(h);
 	top = heap.top().v;
       }
@@ -283,21 +284,20 @@ namespace dsaam
          to_string("Time contract breached : Invalid message time expected ",
          time, " got ", message->time));
     
-      std::unique_lock<std::mutex> lk(m);
+      std::unique_lock<std::mutex> lk(this->m);
       cv.wait(lk, [this]{return heap.top().v < max_qsize;});
-      
-      unsigned int index = 0;
-      for(Sink s : sinks)
-       {
-         if(s.send_callback != nullptr) s.send_callback(message);
-         typename heap_type::handle_type & h=heap_handles[index++];
-         h->value.v += 1;
-         heap.update(h);
-       }
-
+      for(auto h : heap_handles)
+	{
+	  h->value.v += 1;
+	}
       lk.unlock();
       cv.notify_one();
 
+      for(Sink s : sinks)
+       {
+         if(s.send_callback) s.send_callback(message);         
+       }
+      
       next_time  = next_time + dt;
    }
 

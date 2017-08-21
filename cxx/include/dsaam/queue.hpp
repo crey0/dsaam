@@ -3,6 +3,7 @@
 
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
 #include <vector>
 #include <type_traits>
 #include <dsaam/exceptions.hpp>
@@ -29,7 +30,7 @@ namespace dsaam
     {
       BoundedCheck(unsigned int bound) : bound(bound) {}
       
-      inline void operator()(int value)
+      inline void operator()(unsigned int value)
       {
 	logic_assert(value <= bound,
 		     to_string("Bounded semaphore has exceeded bounds ",value,">",bound));
@@ -40,16 +41,16 @@ namespace dsaam
     typedef typename std::conditional<isBounded, BoundedCheck, NoCheck>::type CheckType;
     
   public:
+    _Semaphore(unsigned int tokens, unsigned int bound)
+      : tokens(tokens), bounded_check(bound) {}
     _Semaphore(unsigned int tokens)
-      : tokens(tokens), bounded_check(tokens)
-    {
-    }
+      : tokens(tokens), bounded_check(tokens) {}
 
     void increase()
     {
       {
-	std::lock_guard<std::mutex>(this->m);
-	tokens +=1;
+	std::lock_guard<std::mutex> lk(this->m);
+        ++tokens;
         bounded_check(tokens);
       }
       cv.notify_one();
@@ -57,9 +58,9 @@ namespace dsaam
 
     void decrease()
     {
-      std::unique_lock<std::mutex> lk(m);
+      std::unique_lock<std::mutex> lk(this->m);
       cv.wait(lk, [this]{return tokens > 0;});
-      tokens -=1;
+      --tokens;
       lk.unlock();
       cv.notify_one();
     }
@@ -85,7 +86,7 @@ namespace dsaam
   {
   public:
     Queue(unsigned int max_size)
-      : max_size(max_size), head(0), tail(0), n_full_to_pop(0), n_free_to_push(max_size),
+      : max_size(max_size), head(0), tail(0), n_full_to_pop(0, max_size), n_free_to_push(max_size),
 	buffer(max_size)
     {
       if(max_size == 0) throw  std::length_error("Queue min size is 1");
@@ -118,8 +119,8 @@ namespace dsaam
     unsigned int max_size;
     unsigned int head;
     unsigned int tail;
-    Semaphore n_full_to_pop;
-    Semaphore n_free_to_push;
+    BoundedSemaphore n_full_to_pop;
+    BoundedSemaphore n_free_to_push;
     std::vector<M> buffer;
   };
     

@@ -3,6 +3,7 @@
 
 #include<string>
 #include<stdexcept>
+#include<cassert>
 
 #define logic_assert(test, error) if(!(test)) throw std::logic_error(error)
 
