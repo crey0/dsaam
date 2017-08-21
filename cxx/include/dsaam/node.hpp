@@ -6,8 +6,6 @@
 #define DSAAM_NODE_HPP
 
 #include<string>
-//#include<boost/heap/binomial_heap.hpp>
-//#include<boost/heap/fibonacci_heap.hpp>
 #include<vector>
 #include<deque>
 #include<list>
@@ -184,7 +182,7 @@ namespace dsaam
       heap_data & q = const_cast<heap_data &>(heap.top());
       //std::cout << to_string("[",std::this_thread::get_id(),"] [",time,"] popping on queue ",q.flow.name,"\n");
       auto m = q.queue.pop();
-      heap.update(q.handle);
+      heap.decrease(q.handle);
       q.flow.time_callback(nextTime());
       q.flow.callback(std::move(m), nextTime());
     }
@@ -271,7 +269,7 @@ namespace dsaam
         typename heap_type::handle_type & h = heap_handles[subscriber];
 	assert(h->value.v > 0);
 	h->value.v -= 1;
-	heap.update(h);
+	heap.decrease(h);
 	top = heap.top().v;
       }
       if (top < max_qsize)

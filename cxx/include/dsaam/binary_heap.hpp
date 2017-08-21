@@ -1,7 +1,7 @@
 #ifndef BINARY_HEAP_HPP
 #define BINARY_HEAP_HPP
 #include<vector>
-#include<forward_list>
+#include<list>
 
 namespace dsaam
 {
@@ -15,7 +15,7 @@ namespace dsaam
     {
       node_type(size_t index, const T &value) : index(index), value(value) {}
       size_t index;
-      typename std::forward_list<struct node_type>::const_iterator it_erase;
+      typename std::list<struct node_type>::const_iterator it_erase;
       T value;
     }node_type;
       
@@ -29,16 +29,19 @@ namespace dsaam
       heap_data_.emplace_front(heap_.size(), v);
       handle_type h = &heap_data_.front();
       heap_.emplace_back(h);
-      h->it_erase = heap_data_.before_begin();
+      h->it_erase = heap_data_.begin();
       size_ = heap_.size();
       return h;
     }
 
     void pop()
     {
-      swap_nodes(heap_.front(), heap_.back());
+      auto hf = heap_.front();
+      auto hb = heap_.back();
+      swap_nodes(hf, hb);
       heap_.pop_back();
-      decrease(heap_.front());
+      decrease(hb);
+      heap_data_.erase(hf->it_erase);
     }
       
     T& top() const
@@ -124,7 +127,7 @@ namespace dsaam
     
   private:
     C compare;
-    std::forward_list<node_type> heap_data_;
+    std::list<node_type> heap_data_;
     std::vector<handle_type> heap_;
     size_t size_;
     
