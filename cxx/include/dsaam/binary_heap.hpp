@@ -79,7 +79,7 @@ namespace dsaam
 	default: 
 	  auto l = left(h);
 	  auto r = right(h);
-	  return compare(r->value, l->value) ? r : l;
+	  return compare(l->value, r->value) ? r : l;
 	}
     }
       
@@ -94,7 +94,7 @@ namespace dsaam
     
     void update(handle_type h)
     {
-      if(h->index != 0 && compare(h->value, father(h)->value))
+      if(h->index != 0 && compare(father(h)->value, h->value))
 	{
 	  increase(h);
 	}
@@ -106,7 +106,7 @@ namespace dsaam
 
     void increase(handle_type h)
     {
-      while(h->index != 0 && compare(h->value, father(h)->value))
+      while(h->index != 0 && compare(father(h)->value, h->value))
 	{
 	  swap_nodes(h, father(h));
 	}
@@ -115,7 +115,7 @@ namespace dsaam
     void decrease(handle_type h)
     {
       auto c = best_child(h);
-      while(c && compare(c->value, h->value))
+      while(c && compare(h->value, c->value))
 	{
 	  swap_nodes(h,c);
 	  c = best_child(h);
