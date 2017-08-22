@@ -3,7 +3,7 @@
 Nbody test
 
  ***/
-#include <dsaam/node.hpp>
+#include <dsaam/onethreadnode.hpp>
 #include <dsaam/string_utils.hpp>
 #include <string>
 #include <vector>
@@ -130,21 +130,21 @@ public:
       }
   }
 
-  void pCallback(Body &b, const dsaam::Node::mpointer & pm, const dsaam::Time &nextAt)
+  void pCallback(Body &b, const dsaam::Node::mpointer & pm, const dsaam::Time &)
   {
     auto pmp = static_cast<const PMessage *>(pm.get());
-    std::cout << dsaam::to_string("[", pmp->time, "]", "[",_self.name,"] pos update of ", b.name,
-				  " next at ",nextAt)
-	      << std::endl;
+    //std::cout << dsaam::to_string("[", pmp->time, "]", "[",_self.name,"] pos update of ", b.name,
+    //				  " next at ",nextAt)
+    //	      << std::endl;
     b.p = pmp->p;
   }
   
-  void vCallback(Body & b, const dsaam::Node::mpointer & pm,  const dsaam::Time &nextAt)
+  void vCallback(Body & b, const dsaam::Node::mpointer & pm,  const dsaam::Time &)
   {
     auto pmv = static_cast<const VMessage *>(pm.get());
-    std::cout << dsaam::to_string("[", pmv->time, "]", "[",_self.name,"] spe update of ", b.name,
-				  " next at ",nextAt)
-	      << std::endl;
+    //std::cout << dsaam::to_string("[", pmv->time, "]", "[",_self.name,"] spe update of ", b.name,
+    //				  " next at ",nextAt)
+    //	      << std::endl;
     b.v = pmv->v;
   }
 
@@ -192,7 +192,7 @@ public:
 
   virtual void step(const dsaam::Time & to)
   {
-    std::cout << to_string("[",time(),"] [",name,"] Stepping to ",to) << std::endl;
+    //std::cout << to_string("[",time(),"] [",name,"] Stepping to ",to) << std::endl;
     system.integrate(to - time());
     //send updated position and speed
     send_state(to);
@@ -217,8 +217,6 @@ public:
 private:
   void send_state(dsaam::Time t)
   {
-    std::cout<< to_string("[",t,"]","[",name,"] Sending state") << std::endl;
-
     dsaam::Node::mpointer m = \
       dsaam::Node::mpointer(new OneBodySystem::PMessage(system.self().p, t));
     send_p(std::move(m));
@@ -311,7 +309,7 @@ int main()
       nodes.emplace_back(all_bodies,
 			 names[i], start_time, dts[i],
 			 inflows, outflows,
-			 max_qsize, dsaam::Time(1000));
+			 max_qsize, dsaam::Time(10000));
     }
 
   auto get_node = [&](string name) -> OneBSystemNode&

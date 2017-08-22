@@ -1,5 +1,5 @@
-#ifndef BINARY_HEAP_HPP
-#define BINARY_HEAP_HPP
+#ifndef DSAAM_BINARY_HEAP_HPP
+#define DSAAM_BINARY_HEAP_HPP
 #include<vector>
 #include<list>
 

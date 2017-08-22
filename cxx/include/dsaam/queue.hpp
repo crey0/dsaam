@@ -6,9 +6,10 @@
 #include <atomic>
 #include <vector>
 #include <type_traits>
+//#include <iostream>
+
 #include <dsaam/exceptions.hpp>
 #include <dsaam/string_utils.hpp>
-#include <iostream>
 
 namespace dsaam
 {
@@ -90,10 +91,9 @@ namespace dsaam
 	buffer(max_size)
     {
       if(max_size == 0) throw  std::length_error("Queue min size is 1");
-      std::cout << "Queue::Queue(" << this << ", max_size=" << max_size << ")" << std::endl;
     }
 
-    ~Queue() {std::cout << "Queue::~Queue(" << this << ", max_size=" << max_size << ")" << std::endl; }
+    ~Queue() {}
  
 
     void push(M &&e)
