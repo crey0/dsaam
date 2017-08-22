@@ -2,7 +2,6 @@
 #define DSAAM_COMMON_HPP
 
 #include<dsaam/exceptions.hpp>
-#include<dsaam/time.hpp>
 #include<dsaam/string_utils.hpp>
 #include<functional>
 #include<memory>
@@ -13,59 +12,60 @@ namespace dsaam
 
   using std::string;
 
-  class MessageBase;
-  struct InFlow;
-  struct OutFlow;
-  struct Sink;
-  
-  typedef  std::function<void(const std::shared_ptr<MessageBase const>&, const Time &)>
-  message_callback_type;
+  template<class M, class T> struct InFlow;
+  template<class M, class T> struct OutFlow;
+  template<class M> struct Sink;
 
-  typedef  std::function<void(const std::shared_ptr<MessageBase const> &)>
-  send_callback_type;
+  template<class M, class T>
+  using  message_callback_type =  std::function<void(const M&, const T &)>;
 
-  typedef  std::function<void(const Time &)>
-  time_callback_type;
-  static const message_callback_type EMPTY_MESSAGE_CALLBACK;
-  static const send_callback_type EMPTY_SEND_CALLBACK;
-  static const time_callback_type EMPTY_TIME_CALLBACK;
+  template<class M>
+  using send_callback_type = std::function<void(const M &)>;
 
-    class MessageBase
+  template<class T>
+  using time_callback_type = std::function<void(const T &)>;
+
+  template<class T>
+  struct empty
   {
-  public:
-    MessageBase(const Time &time) : time(time) {}
-  public:
-    const Time time;
+    static constexpr const T value()
+    {
+      return T();
+    }
   };
-  
-  typedef struct InFlow
+
+
+  template<class M, class T>
+  struct InFlow
   {
-    InFlow(string name, Time dt,
-	   const message_callback_type &callback = EMPTY_MESSAGE_CALLBACK,
-	   const time_callback_type &time_callback = EMPTY_TIME_CALLBACK)
+    InFlow(string name, T dt,
+	   const message_callback_type<M,T> &callback = empty<message_callback_type<M,T>>::value(),
+	   const time_callback_type<T> &time_callback = empty<time_callback_type<T>>::value())
       : name(name), dt(dt), callback(callback), time_callback(time_callback) {}
     string name;
-    Time dt;
-    message_callback_type callback;
-    time_callback_type time_callback;
-  } InFlow;
+    T dt;
+    message_callback_type<M, T> callback;
+    time_callback_type<T> time_callback;
+  };
   
-  typedef struct Sink
+  template<class M>
+  struct Sink
   {
-    Sink(string name, const send_callback_type &send_callback = EMPTY_SEND_CALLBACK)
+    Sink(string name, const send_callback_type<M> &send_callback = empty<send_callback_type<M>>::value())
       : name(name), send_callback(send_callback) {}
     string name;
-    send_callback_type send_callback;
-  } Sink;
+    send_callback_type<M> send_callback;
+  };
 
-  typedef struct OutFlow
+  template<class M, class T>
+  struct OutFlow
   {
-    OutFlow(string name, Time dt, std::vector<Sink> sinks)
+    OutFlow(string name, T dt, std::vector<Sink<M>> sinks)
       : name(name), dt(dt), sinks(sinks) {}
     string name;
-    Time dt;
-    std::vector<Sink> sinks;
-  } OutFlow;
+    T dt;
+    std::vector<Sink<M>> sinks;
+  };
 
 }
 

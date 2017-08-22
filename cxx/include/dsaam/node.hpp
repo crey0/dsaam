@@ -12,18 +12,26 @@
 
 namespace dsaam
 {
+
+  template<class M, class T, class FMT>
   class Node
   {
   public:
-    typedef std::shared_ptr<class MessageBase const > mpointer;
-    typedef std::function<void(const mpointer &)> push_callback_type;
+    using mpointer=std::shared_ptr<M const>;
+    using push_callback_type = std::function<void(const mpointer &)>;
+    using message_callback_type = ::dsaam::message_callback_type<mpointer, T>;
+    using send_callback_type = ::dsaam::send_callback_type<mpointer>;
+    using time_callback_type = ::dsaam::time_callback_type<T>;
+    using InFlow = ::dsaam::InFlow<mpointer, T>;
+    using OutFlow = ::dsaam::OutFlow<mpointer, T>;
+    using Sink = ::dsaam::Sink<mpointer>;
 
-    Node(string &name, Time &time, Time &dt, std::vector<InFlow> &inflows,
+    Node(string &name, T &time, T &dt, std::vector<InFlow> &inflows,
 	 std::vector<OutFlow> &outflows, unsigned int max_qsize) :
       name(name), _time(time), _dt(dt),
       inflows(inflows, time, max_qsize), outflows()
     {
-      for(OutFlow flow : outflows)
+      for(auto &flow : outflows)
 	{
 	  this->outflows.emplace_back(flow.name, _time, flow.dt,
 				      flow.sinks, max_qsize);
@@ -37,24 +45,24 @@ namespace dsaam
       this->inflows.next();
     }
 
-    ::dsaam::send_callback_type send_callback(unsigned int flow)
+    send_callback_type send_callback(unsigned int flow)
     {
       using std::placeholders::_1;
       return std::bind(&Node::_send, this, &outflows[flow], _1);
     }
     
-    ::dsaam::send_callback_type send_callback(const string & flow)
+    send_callback_type send_callback(const string & flow)
     {
       return send_callback(_out_flow_index(flow));
     }
 
-    ::dsaam::time_callback_type time_callback(unsigned int flow, unsigned int sink)
+    time_callback_type time_callback(unsigned int flow, unsigned int sink)
     {
       using std::placeholders::_1;
-      return std::bind(&OutMessageFlow<mpointer>::time_callback, &outflows[flow], sink, _1);
+      return std::bind(&OutMessageFlow<mpointer, T, FMT>::time_callback, &outflows[flow], sink, _1);
     }
 
-    ::dsaam::time_callback_type time_callback(const string &flow, const string &sink)
+    time_callback_type time_callback(const string &flow, const string &sink)
     {
       unsigned int iflow = _out_flow_index(flow);
       return time_callback(iflow, _out_flow_sink_index(iflow, sink));
@@ -62,7 +70,7 @@ namespace dsaam
     push_callback_type push_callback(unsigned int flow)
     {
       using std::placeholders::_1;
-      return std::bind(&MessageFlowMultiplexer<mpointer>::push, &inflows, flow, _1);
+      return std::bind(&MessageFlowMultiplexer<mpointer, T, FMT>::push, &inflows, flow, _1);
     }
 
     push_callback_type push_callback(const string &flow)
@@ -70,38 +78,38 @@ namespace dsaam
       return push_callback(_in_flow_index(flow));
     }
 
-    void stepTime(const Time & t)
+    void stepTime(const T & t)
     {
       logic_assert(t >= _time,
 		   to_string("Time contract breached, stepping back in time from ",_time," to ",t));
       _time = t;
     }
 
-    const Time & time() const
+    const T & time() const
     {
       return _time;
     }
 
-    const Time & nextAt() const
+    const T & nextAt() const
     {
       return inflows.nextTime();
     }
 
-    const Time & dt() const
+    const T & dt() const
     {
       return _dt;
     }
 
     void set_inflow_callbacks(const string & ifname,
-			      const ::dsaam::message_callback_type &m_cb,
-			      const ::dsaam::time_callback_type &t_cb)
+			      const message_callback_type &m_cb,
+			      const time_callback_type &t_cb)
     {
       inflows.set_flow_callbacks(_in_flow_index(ifname), m_cb, t_cb);
     }
 
     void set_outflow_callback(const string & ofname,
 			      const string & sinkname,
-			      const ::dsaam::send_callback_type &cb)
+			      const send_callback_type &cb)
     {
       unsigned int odx = _out_flow_index(ofname);
       outflows[odx].set_sink_callback(_out_flow_sink_index(odx, sinkname), cb);
@@ -109,14 +117,14 @@ namespace dsaam
 
   private:
 
-    void _send(OutMessageFlow<mpointer> * outflow, const mpointer & m)
+    void _send(OutMessageFlow<mpointer, T, FMT> * outflow, const mpointer & m)
     {
-      logic_assert(m->time >= time(),
-		   to_string("Time contract breached : sending message with time ", m->time,
+      logic_assert(FMT::time(m) >= time(),
+		   to_string("Time contract breached : sending message with time ", FMT::time(m),
 			     " in the future  (current time is ", time()));
-      logic_assert(m->time <= inflows.nextTime(),
+      logic_assert(FMT::time(m) <= inflows.nextTime(),
 		   to_string("Time contract breached: sending message at ",
-			     m->time, " before arrival of next message at ", inflows.nextTime()));
+			     FMT::time(m), " before arrival of next message at ", inflows.nextTime()));
       outflow->send(m);
     }
       
@@ -142,10 +150,10 @@ namespace dsaam
   public:
     const string name;
   private:
-    Time _time;
-    Time _dt;
-    MessageFlowMultiplexer<mpointer> inflows;
-    std::deque<OutMessageFlow<mpointer>> outflows;  
+    T _time;
+    T _dt;
+    MessageFlowMultiplexer<mpointer, T, FMT> inflows;
+    std::deque<OutMessageFlow<mpointer, T, FMT>> outflows;  
   };
 
 

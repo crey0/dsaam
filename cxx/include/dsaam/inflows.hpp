@@ -7,56 +7,56 @@
 
 namespace dsaam
 {
-   template<class T>
-  class MessageQueue : public Queue<T>
+  template<class M, class T, class FMT>
+  class MessageQueue : public Queue<M>
   {
   public:
-    MessageQueue(Time start_time, Time dt, unsigned int max_size)
-      : Queue<T>(max_size), nextTime(start_time), dt(dt) {}
+    MessageQueue(const T &start_time,const T &dt, unsigned int max_size)
+      : Queue<M>(max_size), nextTime(start_time), dt(dt) {}
 
-    T && pop()
+    M && pop()
     {
-      T && m = Queue<T>::pop();
-      logic_assert(m->time == nextTime,
+      M && m = Queue<M>::pop();
+      logic_assert(FMT::time(m) == nextTime,
 		   to_string("Time contract breached : Invalid message time expected ",
-			     nextTime, " got ", m->time));
+			     nextTime, " got ", FMT::time(m)));
       nextTime = nextTime + dt;
       return std::move(m);
     }
 
-    const Time & nextAt() const
+    const T & nextAt() const
     {
       return nextTime; 
     }
       
   private:
-    Time nextTime;
-    Time dt;
+    T nextTime;
+    T dt;
   };
 
-  template<typename T>
-  inline bool operator<(const MessageQueue<T> &l, const MessageQueue<T> &r)
+  template<typename M, typename T, typename FMT>
+  inline bool operator<(const MessageQueue<M, T, FMT> &l, const MessageQueue<M, T, FMT> &r)
   { return l.nextAt() < r.nextAt();}
 
-  template<typename T>
-  inline bool operator>(const MessageQueue<T> &l, const MessageQueue<T> &r)
+  template<typename M, typename T, typename FMT>
+  inline bool operator>(const MessageQueue<M, T, FMT> &l, const MessageQueue<M, T, FMT> &r)
   { return r < l;}
   
-  template<class T>
+  template<class M, class T, class FMT>
   class MessageFlowMultiplexer
   {
        
     class heap_data;
     typedef  binary_heap<heap_data, std::greater<heap_data>> heap_type;
-    typedef std::allocator<MessageQueue<T>> MQAllocType;
+    typedef std::allocator<MessageQueue<M, T, FMT>> MQAllocType;
     typedef std::allocator_traits<MQAllocType> MQAllocTraits;
     
     class heap_data
     {
     public:
-      heap_data(InFlow &flow, MessageQueue<T> & queue) : flow(flow), queue(queue) {}
-      InFlow &flow;
-      MessageQueue<T> & queue;
+      heap_data(InFlow<M, T> &flow, MessageQueue<M, T, FMT> & queue) : flow(flow), queue(queue) {}
+      InFlow<M, T> &flow;
+      MessageQueue<M, T, FMT> & queue;
       typename heap_type::handle_type handle;
 
       bool operator>(const heap_data& r) const { return queue > r.queue;}
@@ -65,12 +65,12 @@ namespace dsaam
 
 
   public:
-    MessageFlowMultiplexer(std::vector<InFlow> &inflows, const Time &time, unsigned int max_qsize):
+    MessageFlowMultiplexer(std::vector<InFlow<M, T>> &inflows, const T &time, unsigned int max_qsize):
       inflows(inflows), time(time), max_qsize(max_qsize), mqalloc(), heap()
     {
       this->queues = MQAllocTraits::allocate(mqalloc, inflows.size());
       int index = 0;
-      for(InFlow & flow : this->inflows)
+      for(InFlow<M, T> & flow : this->inflows)
 	{
 	  MQAllocTraits::construct(mqalloc, &this->queues[index],
 				   time, flow.dt, max_qsize);
@@ -102,9 +102,9 @@ namespace dsaam
  
     }
   
-    void push(unsigned int flow_index, const T & message)
+    void push(unsigned int flow_index, const M & message)
     {
-      T m = message;
+      M m = message;
       //std::cout << to_string("[",std::this_thread::get_id(),"] pushing on flow ",flow_index,
       //			     "/",&queues[flow_index], "\n");
       queues[flow_index].push(std::move(m));
@@ -120,7 +120,7 @@ namespace dsaam
       q.flow.callback(std::move(m), nextTime());
     }
 
-    const Time & nextTime() const
+    const T & nextTime() const
     {
       auto & q = heap.top();
       //std::cout << to_string("[",time,"] next message InFlow ",q.flow.name, " at ", q.queue.nextAt(), "\n");
@@ -129,8 +129,8 @@ namespace dsaam
     }
 
     void set_flow_callbacks(unsigned int fidx,
-			    const ::dsaam::message_callback_type &m_cb,
-			    const ::dsaam::time_callback_type &t_cb)
+			    const ::dsaam::message_callback_type<M, T> &m_cb,
+			    const ::dsaam::time_callback_type<T> &t_cb)
     {
       inflows[fidx].callback = m_cb;
       inflows[fidx].time_callback = t_cb;
@@ -138,12 +138,12 @@ namespace dsaam
     }
     
   public:
-    std::vector<InFlow> inflows;
-    Time time;
+    std::vector<InFlow<M, T>> inflows;
+    T time;
     unsigned int max_qsize;
     MQAllocType mqalloc;
     heap_type heap;
-    MessageQueue<T> * queues;
+    MessageQueue<M, T, FMT> * queues;
    
     
   };

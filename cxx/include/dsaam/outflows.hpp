@@ -5,12 +5,12 @@
 
 namespace dsaam
 {
-  template<class T>
+  template<class M, class T, class FMT>
   class OutMessageFlow
   {
     struct heap_data;
     typedef binary_heap<struct heap_data> heap_type;
-    typedef struct heap_data
+    struct heap_data
     {
       heap_data(unsigned int v = 0) : v(v), h() {}
       heap_data(unsigned int v, const typename heap_type::handle_type & h) : v(v), h(h) {}
@@ -19,17 +19,17 @@ namespace dsaam
       
       unsigned int v;
       typename heap_type::handle_type h;
-    }heap_data;
+    };
 
     
     
   public:
-    OutMessageFlow(string name, Time start_time, Time dt, std::vector<Sink> &sinks,
+    OutMessageFlow(string name, T start_time, T dt, std::vector<Sink<M>> &sinks,
 		   unsigned int max_qsize)
       :  name(name), max_qsize(max_qsize), next_time(start_time), dt(dt), sinks(sinks),
 	 heap(), heap_handles()
     {
-      for(auto s : sinks)
+      for(size_t i = 0; i < sinks.size(); i++)
 	{
 	  typename heap_type::handle_type h = heap.push(0);
 	  h->value.h = h;
@@ -40,7 +40,7 @@ namespace dsaam
     unsigned int subscriber_index(const string & name) const
     {
       unsigned int i = 0;
-      for(auto s : sinks)
+      for(auto &s : sinks)
 	{
 	  if (s.name == name) return i;
 	  i++;
@@ -50,7 +50,7 @@ namespace dsaam
     }
 
 
-    void time_callback(unsigned int subscriber, const Time &)
+    void time_callback(unsigned int subscriber, const T &)
     {
       unsigned int top;
       {
@@ -66,11 +66,11 @@ namespace dsaam
 	cv.notify_one();
     }
     
-    void send(const T & message)
+    void send(const M & message)
     {
-      logic_assert(message->time == next_time,
+      logic_assert(FMT::time(message) == next_time,
 		   to_string("Time contract breached : Invalid message time expected ",
-			     time, " got ", message->time));
+			     time, " got ", FMT::time(message)));
     
       std::unique_lock<std::mutex> lk(this->m);
       cv.wait(lk, [this]{return heap.top().v < max_qsize;});
@@ -81,7 +81,7 @@ namespace dsaam
       lk.unlock();
       cv.notify_one();
 
-      for(Sink s : sinks)
+      for(Sink<M> s : sinks)
 	{
 	  if(s.send_callback) s.send_callback(message);         
 	}
@@ -89,7 +89,7 @@ namespace dsaam
       next_time  = next_time + dt;
     }
 
-    void set_sink_callback(unsigned int sink_idx, const ::dsaam::send_callback_type & cb)
+    void set_sink_callback(unsigned int sink_idx, const ::dsaam::send_callback_type<M> & cb)
     {
       sinks[sink_idx].send_callback = cb;
     }
@@ -99,9 +99,9 @@ namespace dsaam
 
   private:
     unsigned int max_qsize;
-    Time next_time;
-    Time dt;
-    std::vector<Sink> sinks;
+    T next_time;
+    T dt;
+    std::vector<Sink<M>> sinks;
     heap_type heap;
     std::vector<typename heap_type::handle_type> heap_handles;
     std::mutex m;
