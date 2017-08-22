@@ -5,6 +5,8 @@ Nbody test
  ***/
 #include <dsaam/onethreadnode.hpp>
 #include <dsaam/string_utils.hpp>
+#include <dsaam/time.hpp>
+
 #include <string>
 #include <vector>
 #include <cmath>
@@ -96,11 +98,34 @@ typedef struct Body
 }Body;
 
 
+class MessageBase
+{
+public:
+  MessageBase(const dsaam::Time &time) : time(time) {}
+public:
+  const dsaam::Time time;
+};
+
+struct FMessageTime;
+using mpointer = dsaam::Node<MessageBase, dsaam::Time, FMessageTime>::mpointer;
+using InFlow = dsaam::Node<MessageBase, dsaam::Time, FMessageTime>::InFlow;
+using OutFlow = dsaam::Node<MessageBase, dsaam::Time, FMessageTime>::OutFlow;
+using Sink = dsaam::Node<MessageBase, dsaam::Time, FMessageTime>::Sink;
+
+
+struct FMessageTime
+{
+  static const dsaam::Time& time(mpointer b)
+  {
+    return b->time;
+  }
+};
+
 class OneBodySystem
 {
 public:
 
-  class PMessage : public dsaam::MessageBase
+  class PMessage : public MessageBase
   {
   public:
     PMessage(const Array2d & p, const dsaam::Time & t)
@@ -109,7 +134,7 @@ public:
     Array2d p;
   };
 
-  class VMessage : public dsaam::MessageBase
+  class VMessage : public MessageBase
   {
   public:
     VMessage(const Array2d & v, const dsaam::Time & t)
@@ -130,7 +155,7 @@ public:
       }
   }
 
-  void pCallback(Body &b, const dsaam::Node::mpointer & pm, const dsaam::Time &)
+  void pCallback(Body &b, const mpointer & pm, const dsaam::Time &)
   {
     auto pmp = static_cast<const PMessage *>(pm.get());
     //std::cout << dsaam::to_string("[", pmp->time, "]", "[",_self.name,"] pos update of ", b.name,
@@ -139,7 +164,7 @@ public:
     b.p = pmp->p;
   }
   
-  void vCallback(Body & b, const dsaam::Node::mpointer & pm,  const dsaam::Time &)
+  void vCallback(Body & b, const mpointer & pm,  const dsaam::Time &)
   {
     auto pmv = static_cast<const VMessage *>(pm.get());
     //std::cout << dsaam::to_string("[", pmv->time, "]", "[",_self.name,"] spe update of ", b.name,
@@ -170,11 +195,11 @@ private:
   std::vector<Body> bodies;
 };
 
-class OneBSystemNode : public dsaam::OneThreadNode
+class OneBSystemNode : public dsaam::OneThreadNode<MessageBase, dsaam::Time, FMessageTime>
 {
 public:
   OneBSystemNode(std::vector<Body> & bodies, string &name, dsaam::Time &time, dsaam::Time &dt,
-		 std::vector<dsaam::InFlow> &inflows, std::vector<dsaam::OutFlow> &outflows,
+		 std::vector<InFlow> &inflows, std::vector<OutFlow> &outflows,
 		 unsigned int max_qsize,
 		 const dsaam::Time &stop_time)
     : OneThreadNode(name,time,dt,inflows,outflows,max_qsize), system(name, bodies, time),
@@ -200,14 +225,14 @@ public:
 
   }
 
-  dsaam::message_callback_type pCallback(const string &b_name)
+  message_callback_type pCallback(const string &b_name)
   {
     Body & b = system.get_body(b_name);
     return std::bind(&OneBodySystem::pCallback, &system, b,
 		     std::placeholders::_1, std::placeholders::_2);
   }
 
-   dsaam::message_callback_type vCallback(const string &b_name)
+  message_callback_type vCallback(const string &b_name)
   {
     Body & b = system.get_body(b_name);
     return std::bind(&OneBodySystem::vCallback, &system, b,
@@ -217,19 +242,19 @@ public:
 private:
   void send_state(dsaam::Time t)
   {
-    dsaam::Node::mpointer m = \
-      dsaam::Node::mpointer(new OneBodySystem::PMessage(system.self().p, t));
+    mpointer m = \
+      mpointer(new OneBodySystem::PMessage(system.self().p, t));
     send_p(std::move(m));
      
     
-    m =  dsaam::Node::mpointer(new OneBodySystem::VMessage(system.self().v, t));
+    m = mpointer(new OneBodySystem::VMessage(system.self().v, t));
     send_v(std::move(m));
   }
 
   OneBodySystem system;
   dsaam::Time stop_time;
-  dsaam::send_callback_type send_p;
-  dsaam::send_callback_type send_v;
+  send_callback_type send_p;
+  send_callback_type send_v;
 };
 
 int main()
@@ -288,7 +313,7 @@ int main()
     {
       auto &b = all_bodies[i];
       
-      std::vector<dsaam::InFlow> inflows;
+      std::vector<InFlow> inflows;
       for(size_t j=0; j < ins[i].size(); j++)
 	{
 	  string j_name = ins[i][j];
@@ -297,14 +322,14 @@ int main()
 	  inflows.emplace_back(j_name+"/speed", dts[jdx]);
 	}
       
-      std::vector<dsaam::Sink> sinks;
+      std::vector<Sink> sinks;
       for(size_t j=0; j < outs[i].size(); j++)
 	{
 	  string b_name = outs[i][j];
 	  sinks.emplace_back(b_name);
 	}
       
-      std::vector<dsaam::OutFlow> outflows = {{b.name + "/position", dts[i], sinks},
+      std::vector<OutFlow> outflows = {{b.name + "/position", dts[i], sinks},
 					      {b.name + "/speed", dts[i], sinks}};
       nodes.emplace_back(all_bodies,
 			 names[i], start_time, dts[i],
@@ -333,7 +358,7 @@ int main()
 	  n.set_inflow_callbacks(js, n.vCallback(j_name), nj.time_callback(js, n.name));
 
 	}
-      std::vector<dsaam::Sink> sinks;
+      std::vector<Sink> sinks;
       for(size_t j=0; j < outs[i].size(); j++)
 	{
 	  string j_name = outs[i][j];
