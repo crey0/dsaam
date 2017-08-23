@@ -8,7 +8,7 @@ def get_version():
 
 version = get_version()
 print("Package version: " + version)
-    
+
 setup(
     name='dsaam',
 
@@ -30,7 +30,7 @@ setup(
         'Programming Language :: Python :: 3.5',
     ],
     package_dir={'':'python'},
-    packages=find_packages(include='python'),
+    packages=find_packages(where='python'),
     install_requires = [],
     
 )
