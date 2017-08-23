@@ -29,7 +29,7 @@ setup(
         'Intended Audience :: Developers',
         'Programming Language :: Python :: 3.5',
     ],
-
+    package_dir={'':'python'},
     packages=find_packages(include='python'),
     install_requires = [],
     
