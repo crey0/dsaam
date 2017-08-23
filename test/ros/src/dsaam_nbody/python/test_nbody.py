@@ -1,3 +1,4 @@
+#/bin/python3
 import yaml
 from ..node import Time
 import numpy as np
@@ -24,18 +25,16 @@ def mkdir_p_file(path):
 def pkg_root_path(path):
     f = path.split("/")
     f.reverse()
-    i = f.index("dsaam")
+    i = f.index("dsaam_nbody")
     f.reverse()
     return "/".join(f[:-1-i])
 
 LAUNCH = '<launch> \n @BODY@ \n </launch>'
 
-LAUNCH_PREFIX = 'launch-prefix="@RUNFILE@"'
-
 GROUP ='\
         <group ns="@NAMESPACE@">\n\
         <rosparam command="load" file="@YAML@" />\n\
-        <node type="@PYTHONFILE@"\n\
+        <node type="@EXECUTABLE@"\n\
               name="@NAME@"\n\
               pkg="@PKG@"\n\
               output="screen" respawn="false" required="true"\n\
@@ -55,14 +54,13 @@ class LaunchFileCreator:
     def __init__(self):
         self.strings = []
 
-    def node(self, name, namespace, exec_path, yaml_path, pkg_path, run_file):
+    def node(self, name, namespace, exec_path, yaml_path, pkg_path):
         self.strings.append(
             GROUP.replace("@NAME@", name)\
             .replace("@NAMESPACE@", namespace)\
             .replace("@YAML@", yaml_path)\
-            .replace("@PYTHONFILE@", exec_path)\
+            .replace("@EXECUTABLE@", exec_path)\
             .replace("@PKG@", pkg_path))
-            #.replace("@RUNFILE@", run_file))
         return self
         
     def rosparam(self, yaml_path):
@@ -139,8 +137,8 @@ def create_launch_file(path, autotest=False):
         }
     # END PARAMS
 
-    runfile = path + "/run_node.sh"
-    conf_path = path + "/conf/"
+    runfile = "run_ros_node.sh"
+    conf_path = path + "/../launch/"
     launch = LaunchFileCreator()
     global_params = { 
         'autotest':autotest,
@@ -181,7 +179,7 @@ def create_launch_file(path, autotest=False):
             }
             yamlp = conf_path + "{}.yaml".format(i)
             create_yaml(yamlp, node_params)
-            launch.node(i, i, "run_ros_node.sh", yamlp, "dsaam", runfile)
+            launch.node(i, i, runfile, yamlp, "dsaam_nbody")
 
     
     c = 'drawer'
@@ -204,7 +202,7 @@ def create_launch_file(path, autotest=False):
     }
     yamlp = conf_path + "{}.yaml".format(i)
     create_yaml(yamlp, node_params)
-    launch.node(i, i, "run_ros_node.sh", yamlp, "dsaam", runfile)
+    launch.node(i, i, runfile, yamlp, "dsaam_nbody")
     launch.write(conf_path + "test_nbody.launch")
 
     # Set ros package path to add the dsaam python root folder 
