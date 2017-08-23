@@ -1,4 +1,4 @@
-from .node import Node, Time, InFlow, OutFlow, Sink, OneThreadNode
+from dsaam.node import Node, Time, InFlow, OutFlow, Sink, OneThreadNode
 import numpy as np
 from copy import deepcopy
 from threading import Event

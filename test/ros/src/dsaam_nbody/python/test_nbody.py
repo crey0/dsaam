@@ -1,6 +1,6 @@
 #/bin/python3
 import yaml
-from ..node import Time
+from dsaam.node import Time
 import numpy as np
 import os
 import errno

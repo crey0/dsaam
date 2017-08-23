@@ -1,7 +1,7 @@
-from ..test_nbody import stop_event, except_event, exception_collect, excepts,\
+from dsaam_test.test_nbody import stop_event, except_event, exception_collect, excepts,\
     Body, System, SystemOne, SystemDrawer, SystemOneNode, DrawerNode
 import rospy
-from .ros_node import RosNode, Time
+from dsaam.ros.ros_node import RosNode, Time
 from geometry_msgs.msg import QuaternionStamped
 import numpy as np
 from time import sleep
