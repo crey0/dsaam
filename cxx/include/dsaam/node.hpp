@@ -17,6 +17,9 @@ namespace dsaam
   class Node
   {
   public:
+    using message_type = M;
+    using time_type = T;
+    using extract_message_time = FMT;
     using mpointer=std::shared_ptr<M const>;
     using push_callback_type = std::function<void(const mpointer &)>;
     using message_callback_type = ::dsaam::message_callback_type<mpointer, T>;
@@ -100,14 +103,14 @@ namespace dsaam
       return _dt;
     }
 
-    void set_inflow_callbacks(const string & ifname,
+    virtual void set_inflow_callbacks(const string & ifname,
 			      const message_callback_type &m_cb,
 			      const time_callback_type &t_cb)
     {
       inflows.set_flow_callbacks(_in_flow_index(ifname), m_cb, t_cb);
     }
 
-    void set_outflow_callback(const string & ofname,
+    virtual void set_outflow_callback(const string & ofname,
 			      const string & sinkname,
 			      const send_callback_type &cb)
     {
