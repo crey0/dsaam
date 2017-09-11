@@ -80,8 +80,8 @@ namespace dsaam::ros
   
   struct ros_header_stamp
   {
-    typedef std_msgs::Header time_message_type;
-    typedef dsaam::Node<std_msgs::Header, ros::Time, ros_header_stamp>::mpointer mpointer;
+    using time_message_type=std_msgs::Header;
+    using mpointer=boost::shared_ptr<time_message_type>;
     
     static const ros::Time& time(const mpointer &m)
     {
@@ -102,13 +102,13 @@ namespace dsaam::ros
   };
   
   template<class M = std_msgs::Header, class T = ros::Time, class FMT = ros_header_stamp>
-  class RosNode : public dsaam::Node
+  class RosNode : public FMT
   {
   public:
 
-    using Node<F, M, FMT>::message_type;
-    using Node<F, M, FMT>::time_type;
-    using Node<F, M, FMT>::extract_message_time;
+    using message_type=M;
+    using time_type=T;
+    using extract_message_time=FMT;
     
     RosNode(T &time, T &dt, std::vector<InFlow> &inflows,
 	    std::vector<OutFlow> &outflows, unsigned int max_qsize)

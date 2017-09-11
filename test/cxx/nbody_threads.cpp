@@ -106,12 +106,7 @@ public:
   const dsaam::Time time;
 };
 
-struct FMessageTime;
-using mpointer = dsaam::Node<MessageBase, dsaam::Time, FMessageTime>::mpointer;
-using InFlow = dsaam::Node<MessageBase, dsaam::Time, FMessageTime>::InFlow;
-using OutFlow = dsaam::Node<MessageBase, dsaam::Time, FMessageTime>::OutFlow;
-using Sink = dsaam::Node<MessageBase, dsaam::Time, FMessageTime>::Sink;
-
+using mpointer = dsaam::ThreadTypes<MessageBase, dsaam::Time>::message_cptr;
 
 struct FMessageTime
 {
@@ -195,15 +190,19 @@ private:
   std::vector<Body> bodies;
 };
 
-class OneBSystemNode : public dsaam::OneThreadNode<MessageBase, dsaam::Time, FMessageTime>
+
+using TTransport = dsaam::ThreadTransport<MessageBase, dsaam::Time, FMessageTime>;
+using InFlow = TTransport::InFlow;
+using OutFlow = TTransport::OutFlow;
+using Sink = TTransport::Sink;
+
+class OneBSystemNode : public dsaam::OneThreadNode<TTransport>
 {
 public:
   OneBSystemNode(std::vector<Body> & bodies, string &name, dsaam::Time &time, dsaam::Time &dt,
-		 std::vector<InFlow> &inflows, std::vector<OutFlow> &outflows,
-		 unsigned int max_qsize,
-		 const dsaam::Time &stop_time)
-    : OneThreadNode(name,time,dt,inflows,outflows,max_qsize), system(name, bodies, time),
-      stop_time(stop_time)
+		 unsigned int max_qsize, const dsaam::Time &stop_time)
+    : dsaam::OneThreadNode<TTransport>(name,time,dt,max_qsize),
+    system(name, bodies, time), stop_time(stop_time)
   {
     send_p = send_callback(name + "/position");
     send_v = send_callback(name + "/speed");
@@ -221,7 +220,7 @@ public:
     system.integrate(to - time());
     //send updated position and speed
     send_state(to);
-    if(to + dt() > stop_time) stop();
+    if(to + dt > stop_time) stop();
 
   }
 
@@ -303,37 +302,18 @@ int main()
 				speeds[i], masses[i], radii[i], colors[i]));
     }
 
-  auto get_node_idx = [&](string name) -> size_t
-    {for(size_t i=0; i<n; i++) if (names[i] == name) return i;
-     throw std::domain_error(name);}; 
+  //  auto get_node_idx = [&](string name) -> size_t
+  // {for(size_t i=0; i<n; i++) if (names[i] == name) return i;
+  // throw std::domain_error(name);}; 
   
   //construct all Nodes
   std::deque<OneBSystemNode> nodes;
   for(size_t i=0; i<n; i++)
-    {
-      auto &b = all_bodies[i];
-      
-      std::vector<InFlow> inflows;
-      for(size_t j=0; j < ins[i].size(); j++)
-	{
-	  string j_name = ins[i][j];
-	  size_t jdx = get_node_idx(j_name);
-	  inflows.emplace_back(j_name+"/position", dts[jdx]);
-	  inflows.emplace_back(j_name+"/speed", dts[jdx]);
-	}
-      
-      std::vector<Sink> sinks;
-      for(size_t j=0; j < outs[i].size(); j++)
-	{
-	  string b_name = outs[i][j];
-	  sinks.emplace_back(b_name);
-	}
-      
-      std::vector<OutFlow> outflows = {{b.name + "/position", dts[i], sinks},
-					      {b.name + "/speed", dts[i], sinks}};
+    {      
+      //std::vector<OutFlow> outflows = {{b.name + "/position", start_time, dts[i], sinks},
+      //				       {b.name + "/speed", start_time, dts[i], sinks}};
       nodes.emplace_back(all_bodies,
 			 names[i], start_time, dts[i],
-			 inflows, outflows,
 			 max_qsize, dsaam::Time(10000));
     }
 
@@ -354,18 +334,30 @@ int main()
 	  auto & nj = get_node(j_name);
 	  auto jp = j_name + "/position";
 	  auto js = j_name + "/speed";
-	  n.set_inflow_callbacks(jp, n.pCallback(j_name), nj.time_callback(jp, n.name));
-	  n.set_inflow_callbacks(js, n.vCallback(j_name), nj.time_callback(js, n.name));
+	  auto inflow = InFlow(jp, start_time, nj.dt);
+	  n.setup_inflow(inflow);
+	  inflow = InFlow(js, start_time, nj.dt);
+	  n.setup_inflow(inflow);
+	  //n.set_inflow_callbacks(jp, n.pCallback(j_name), nj.time_callback(jp, n.name));
+	  //n.set_inflow_callbacks(js, n.vCallback(j_name), nj.time_callback(js, n.name));
 
 	}
-      std::vector<Sink> sinks;
+
+      std::vector<Sink> sinks_p;
+      std::vector<Sink> sinks_v;
       for(size_t j=0; j < outs[i].size(); j++)
 	{
 	  string j_name = outs[i][j];
 	  auto & nj = get_node(j_name);
-	  n.set_outflow_callback(bp, j_name, nj.push_callback(bp));
-	  n.set_outflow_callback(bs, j_name, nj.push_callback(bs));
+	  sinks_p.emplace_back(bp, nj.name, nj);
+	  sinks_v.emplace_back(bs, nj.name, nj);
+	  //n.set_outflow_callback(bp, j_name, nj.push_callback(bp));
+	  //n.set_outflow_callback(bs, j_name, nj.push_callback(bs));
 	}
+      OutFlow outflow = {bp, start_time, dts[i], sinks_p};
+      n.setup_outflow(outflow);
+      outflow = {bs, start_time, dts[i], sinks_v};
+      n.setup_outflow(outflow);
     }
 
   //start Nodes

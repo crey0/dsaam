@@ -12,18 +12,18 @@ namespace dsaam
 
   using std::string;
 
-  template<class M, class T> struct InFlow;
-  template<class M, class T> struct OutFlow;
-  template<class M> struct Sink;
+  template<class M, class T, template <class> class F> struct InFlow;
+  template<class M, class T, template <class> class F, class S> struct OutFlow;
+  struct Sink;
 
-  template<class M, class T>
-  using  message_callback_type =  std::function<void(const M&, const T &)>;
+  template<class M, class T, template <class> class F>
+  using  message_callback_type =  F<void(const M&, const T &)>;
 
-  template<class M>
-  using send_callback_type = std::function<void(const M &)>;
+  template<class M, template <class> class F>
+  using send_callback_type = F<void(const M &)>;
 
-  template<class T>
-  using time_callback_type = std::function<void(const T &)>;
+  template<class T, template <class> class F>
+  using time_callback_type = F<void(const T &)>;
 
   template<class T>
   struct empty
@@ -35,36 +35,42 @@ namespace dsaam
   };
 
 
-  template<class M, class T>
+  template<class M, class T, template <class> class F>
   struct InFlow
   {
-    InFlow(string name, T dt,
-	   const message_callback_type<M,T> &callback = empty<message_callback_type<M,T>>::value(),
-	   const time_callback_type<T> &time_callback = empty<time_callback_type<T>>::value())
-      : name(name), dt(dt), callback(callback), time_callback(time_callback) {}
+    InFlow() = default;
+    InFlow(string name, const T& time, const T& dt, size_t qsize = 0,
+	   const message_callback_type<M,T,F> &callback = empty<message_callback_type<M,T,F>>::value(),
+	   const time_callback_type<T,F> &time_callback = empty<time_callback_type<T,F>>::value())
+      : name(name), time(time), dt(dt), qsize(qsize), callback(callback), time_callback(time_callback) {}
     string name;
+    T time;
     T dt;
-    message_callback_type<M, T> callback;
-    time_callback_type<T> time_callback;
+    size_t qsize;
+    message_callback_type<M, T,F> callback;
+    time_callback_type<T,F> time_callback;
   };
   
-  template<class M>
   struct Sink
   {
-    Sink(string name, const send_callback_type<M> &send_callback = empty<send_callback_type<M>>::value())
-      : name(name), send_callback(send_callback) {}
+    Sink() = default;
+    Sink(string name)
+      : name(name) {}
     string name;
-    send_callback_type<M> send_callback;
   };
 
-  template<class M, class T>
+  template<class M, class T, template <class> class F, class S = Sink>
   struct OutFlow
   {
-    OutFlow(string name, T dt, std::vector<Sink<M>> sinks)
-      : name(name), dt(dt), sinks(sinks) {}
+    OutFlow() = default;
+    OutFlow(string name, const T& time, const T& dt, std::vector<S> sinks, size_t qsize = 0)
+      : name(name), time(time), dt(dt), qsize(qsize), send(), sinks(sinks) {}
     string name;
+    T time;
     T dt;
-    std::vector<Sink<M>> sinks;
+    size_t qsize;
+    send_callback_type<M,F> send;
+    std::vector<S> sinks;
   };
 
 }

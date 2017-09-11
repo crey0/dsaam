@@ -13,36 +13,27 @@
 namespace dsaam
 {
 
-  template<class M, class T, class FMT>
-  class Node
+  template<class T>
+  class Node : public T
   {
   public:
-    using message_type = M;
-    using time_type = T;
-    using extract_message_time = FMT;
-    using mpointer=std::shared_ptr<M const>;
-    using push_callback_type = std::function<void(const mpointer &)>;
-    using message_callback_type = ::dsaam::message_callback_type<mpointer, T>;
-    using send_callback_type = ::dsaam::send_callback_type<mpointer>;
-    using time_callback_type = ::dsaam::time_callback_type<T>;
-    using InFlow = ::dsaam::InFlow<mpointer, T>;
-    using OutFlow = ::dsaam::OutFlow<mpointer, T>;
-    using Sink = ::dsaam::Sink<mpointer>;
+    using transport_type = T;
+    using typename transport_type::message_type;
+    using typename transport_type::time_type;
+    using typename transport_type::message_cptr;
+    template<class F>
+    using function_type = typename transport_type::template function_type<F>;
 
-    Node(string &name, T &time, T &dt, std::vector<InFlow> &inflows,
-	 std::vector<OutFlow> &outflows, unsigned int max_qsize) :
-      name(name), _time(time), _dt(dt),
-      inflows(inflows, time, max_qsize), outflows()
-    {
-      for(auto &flow : outflows)
-	{
-	  this->outflows.emplace_back(flow.name, _time, flow.dt,
-				      flow.sinks, max_qsize);
-	}
-    }
+    using message_callback_type = ::dsaam::message_callback_type<message_cptr, time_type, function_type>;
+    using send_callback_type = ::dsaam::send_callback_type<message_cptr, function_type>;
+    using InFlow = typename transport_type::InFlow;
+    using OutFlow = typename transport_type::OutFlow;
 
-    ~Node(){}
-
+    Node(string &name, time_type &time, unsigned int default_qsize = 0) :
+      name(name), _time(time), default_qsize(default_qsize),
+      inflows(time, default_qsize), outflows()
+    {}
+    
     void next()
     {
       this->inflows.next();
@@ -59,75 +50,68 @@ namespace dsaam
       return send_callback(_out_flow_index(flow));
     }
 
-    time_callback_type time_callback(unsigned int flow, unsigned int sink)
-    {
-      using std::placeholders::_1;
-      return std::bind(&OutMessageFlow<mpointer, T, FMT>::time_callback, &outflows[flow], sink, _1);
-    }
-
-    time_callback_type time_callback(const string &flow, const string &sink)
-    {
-      unsigned int iflow = _out_flow_index(flow);
-      return time_callback(iflow, _out_flow_sink_index(iflow, sink));
-    }
-    push_callback_type push_callback(unsigned int flow)
-    {
-      using std::placeholders::_1;
-      return std::bind(&MessageFlowMultiplexer<mpointer, T, FMT>::push, &inflows, flow, _1);
-    }
-
-    push_callback_type push_callback(const string &flow)
-    {
-      return push_callback(_in_flow_index(flow));
-    }
-
-    void stepTime(const T & t)
+    void stepTime(const time_type & t)
     {
       logic_assert(t >= _time,
 		   to_string("Time contract breached, stepping back in time from ",_time," to ",t));
       _time = t;
     }
 
-    const T & time() const
+    const time_type & time() const
     {
       return _time;
     }
 
-    const T & nextAt() const
+    const time_type & nextAt() const
     {
       return inflows.nextTime();
     }
-
-    const T & dt() const
+    
+    virtual void setup_inflow(InFlow& flow) override
     {
-      return _dt;
+      transport_type::setup_inflow(flow);
+      inflows.setup_inflow(flow);
     }
 
-    virtual void set_inflow_callbacks(const string & ifname,
-			      const message_callback_type &m_cb,
-			      const time_callback_type &t_cb)
+    virtual void setup_outflow(OutFlow &flow) override
     {
-      inflows.set_flow_callbacks(_in_flow_index(ifname), m_cb, t_cb);
+      flow.qsize = flow.qsize > 0 ? flow.qsize : default_qsize;
+      transport_type::setup_outflow(flow);
+      this->outflows.emplace_back(flow);
+ 
     }
 
-    virtual void set_outflow_callback(const string & ofname,
-			      const string & sinkname,
-			      const send_callback_type &cb)
+
+  protected:
+    virtual send_callback_type push_callback(size_t flow) override
     {
-      unsigned int odx = _out_flow_index(ofname);
-      outflows[odx].set_sink_callback(_out_flow_sink_index(odx, sinkname), cb);
+      using std::placeholders::_1;
+      return std::bind(&MessageFlowMultiplexer<message_cptr, time_type, transport_type, InFlow>::push,
+		       &inflows, flow, _1);
     }
 
+    virtual send_callback_type push_callback(const string &flow) override
+    {
+      return push_callback(_in_flow_index(flow));
+    }
+    
   private:
 
-    void _send(OutMessageFlow<mpointer, T, FMT> * outflow, const mpointer & m)
+    void _send(OutFlow * outflow, const message_cptr & m)
     {
-      logic_assert(FMT::time(m) >= time(),
-		   to_string("Time contract breached : sending message with time ", FMT::time(m),
+      logic_assert(transport_type::time(m) >= time(),
+		   to_string("Time contract breached : sending message with time ",
+			     transport_type::time(m),
 			     " in the future  (current time is ", time()));
-      logic_assert(FMT::time(m) <= inflows.nextTime(),
+      logic_assert(transport_type::time(m) <= inflows.nextTime(),
 		   to_string("Time contract breached: sending message at ",
-			     FMT::time(m), " before arrival of next message at ", inflows.nextTime()));
+			     transport_type::time(m), " before arrival of next message at ",
+			     inflows.nextTime()));
+      logic_assert(transport_type::time(m) == outflow->time + outflow->dt,
+		   to_string("Time contract breached : Invalid message time expected ",
+			     outflow->time + outflow->dt, " got ", transport_type::time(m)));
+      outflow->time = transport_type::time(m);
+      
       outflow->send(m);
     }
       
@@ -142,7 +126,13 @@ namespace dsaam
 
     unsigned int _out_flow_sink_index(unsigned int flow, const string & name) const
     {
-      return outflows[flow].subscriber_index(name);
+      unsigned int i = 0;
+      for(auto &s : outflows[flow].sinks)
+	{
+	  if (s.name == name) return i;
+	  i++;
+	}
+      throw  std::domain_error("No sink " + name + " defined on outflow " + this->name);
     }
 
     unsigned int _in_flow_index(const string & name)
@@ -153,10 +143,10 @@ namespace dsaam
   public:
     const string name;
   private:
-    T _time;
-    T _dt;
-    MessageFlowMultiplexer<mpointer, T, FMT> inflows;
-    std::deque<OutMessageFlow<mpointer, T, FMT>> outflows;  
+    time_type _time;
+    size_t default_qsize;
+    MessageFlowMultiplexer<message_cptr, time_type, transport_type, InFlow> inflows;
+    std::deque<OutFlow> outflows;  
   };
 
 

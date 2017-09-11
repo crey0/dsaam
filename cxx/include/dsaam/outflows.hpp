@@ -5,7 +5,7 @@
 
 namespace dsaam
 {
-  template<class M, class T, class FMT>
+  template<class M, class T, template <class> class F, class FMT>
   class OutMessageFlow
   {
     struct heap_data;
@@ -24,31 +24,18 @@ namespace dsaam
     
     
   public:
-    OutMessageFlow(string name, T start_time, T dt, std::vector<Sink<M>> &sinks,
+    OutMessageFlow(string name, T start_time, T dt, OutFlow<M,T,F>& outflow,
 		   unsigned int max_qsize)
-      :  name(name), max_qsize(max_qsize), next_time(start_time), dt(dt), sinks(sinks),
+      :  name(name), max_qsize(max_qsize), next_time(start_time), dt(dt), outflow(outflow),
 	 heap(), heap_handles()
     {
-      for(size_t i = 0; i < sinks.size(); i++)
+      for(size_t i = 0; i < outflow.sinks.size(); i++)
 	{
 	  typename heap_type::handle_type h = heap.push(0);
 	  h->value.h = h;
 	  heap_handles.push_back(h);
 	}
     }
-
-    unsigned int subscriber_index(const string & name) const
-    {
-      unsigned int i = 0;
-      for(auto &s : sinks)
-	{
-	  if (s.name == name) return i;
-	  i++;
-	}
-      throw  std::domain_error("No sink " + name + " defined on outflow " + this->name);
- 
-    }
-
 
     void time_callback(unsigned int subscriber, const T &)
     {
@@ -68,9 +55,6 @@ namespace dsaam
     
     void send(const M & message)
     {
-      logic_assert(FMT::time(message) == next_time,
-		   to_string("Time contract breached : Invalid message time expected ",
-			     time, " got ", FMT::time(message)));
     
       std::unique_lock<std::mutex> lk(this->m);
       cv.wait(lk, [this]{return heap.top().v < max_qsize;});
@@ -81,19 +65,11 @@ namespace dsaam
       lk.unlock();
       cv.notify_one();
 
-      for(Sink<M> s : sinks)
-	{
-	  if(s.send_callback) s.send_callback(message);         
-	}
+      outflow.send(message);
       
       next_time  = next_time + dt;
     }
-
-    void set_sink_callback(unsigned int sink_idx, const ::dsaam::send_callback_type<M> & cb)
-    {
-      sinks[sink_idx].send_callback = cb;
-    }
-
+    
   public:
     const string name;
 
@@ -101,7 +77,7 @@ namespace dsaam
     unsigned int max_qsize;
     T next_time;
     T dt;
-    std::vector<Sink<M>> sinks;
+    OutFlow<M,T,F> outflow;
     heap_type heap;
     std::vector<typename heap_type::handle_type> heap_handles;
     std::mutex m;
