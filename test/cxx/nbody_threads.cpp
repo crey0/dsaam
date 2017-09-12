@@ -7,96 +7,7 @@ Nbody test
 #include <dsaam/string_utils.hpp>
 #include <dsaam/time.hpp>
 
-#include <string>
-#include <vector>
-#include <cmath>
-#include <numeric>
-
-#define EPS 1e-3
-#define G 1.5 * 1.80 * 1e-11
-#define C 8 * 1e-3
-
-typedef std::string string;
-typedef std::array<double, 2>  Array2d;
-
-Array2d operator+(const Array2d &l, const Array2d &r) { return {{l[0]+r[0], l[1]+r[1]}};}
-template<class T>
-Array2d operator+(const Array2d &l, const T &r) { return {{l[0]+r, l[1]+r}};}
-template<class T>
-Array2d operator+(const T &l , const Array2d &r) { return r + l;}
-
-Array2d operator-(const Array2d &r) { return {{-r[0], -r[1]}};}
-Array2d operator-(const Array2d &l, const Array2d &r) { return l + (-r);}
-template<class T>
-Array2d operator-(const Array2d &l, const T &r) { return l + (-r);}
-template<class T>
-Array2d operator-(const T &l , const Array2d &r) { return (-r) + l;}
-
-Array2d operator*(const Array2d &l , const Array2d &r) { return {{l[0]*r[0], l[1]*r[1]}};}
-template<class T>
-Array2d operator*(const Array2d &l, const T &r) { return {{l[0]*r, l[1]*r}};}
-template<class T>
-Array2d operator*(const T &l , const Array2d &r) { return r * l;}
-
-template<class T>
-Array2d operator%(const Array2d &l, const T &r) { return {{fmod(l[0],r), fmod(l[1],r)}};}
-
-template<class T>
-Array2d pow(const Array2d &l, const T &r) { return {{pow(l[0],r), pow(l[1],r)}};}
-
-Array2d sign(Array2d & a) { return {{copysign(1., a[0]), copysign(1., a[1])}}; }
-Array2d abs(Array2d & a) { return {{fabs(a[0]), fabs(a[1])}}; }
-
-template<class T>
-typename T::value_type
-sum(const T& a)
-{return std::accumulate<typename T::const_iterator, typename T::value_type>(a.begin(), a.end(), 0.);}
-
-template<class T>
-typename T::value_type
-norm(const T& a, int b)
-{return pow(sum(pow(a,b)), 1.0/b);}
-
-typedef struct Body
-{
-  Body() = default;
-  
-  Body(string name, Array2d & p0, Array2d & v0, double mass, double radius, string color)
-    : name(name), p(p0), v(v0), mass(mass), radius(radius), color(color)
-  {}
-
-  Array2d  acceleration(std::vector<Body> & others)
-  {
-    Array2d a = {{0.0, 0.0}};
-    for(Body & o : others)
-      {
-	Array2d d = p - o.p;
-	Array2d d1 = -1 * sign(d) * (1 - abs(d));
-	for(size_t i=0; i<d.size(); i++){ d[i] = fabs(d[i]) < fabs(d1[i]) ? d[i] : d1[i]; }
-	double denom = sum(pow(abs(d),3) + EPS);
-	a = a + o.mass/denom * d;
-      }
-    return G * a;
-  }
-  
-  void integrate(std::vector<Body> & others, double dt)
-  {
-    auto a = acceleration(others);
-    p = (p + v*dt) % 1;
-    v = v + a * dt;
-    double n = norm(v,2);
-    if (n > C) v = v * (1/n * C);
-  }
-  
-  string name;
-  Array2d  p;
-  Array2d  v;
-  double mass;
-  double radius;
-  string color;
-
-}Body;
-
+#include "nbody_common.hpp"
 
 class MessageBase
 {
@@ -116,81 +27,46 @@ struct FMessageTime
   }
 };
 
-class OneBodySystem
+class PMessage : public MessageBase
 {
 public:
-
-  class PMessage : public MessageBase
-  {
-  public:
-    PMessage(const Array2d & p, const dsaam::Time & t)
-      : MessageBase(t), p(p) {}
-  public:
-    Array2d p;
-  };
-
-  class VMessage : public MessageBase
-  {
-  public:
-    VMessage(const Array2d & v, const dsaam::Time & t)
-      : MessageBase(t), _filler_("filler"), v(v) {}
-  public:
-    string _filler_;
-    Array2d v;
-  };
-
-
-  OneBodySystem(const string &name, const std::vector<Body>& all_bodies, const dsaam::Time & dt)
-    : dt(dt)
-  {
-    for(auto b : all_bodies)
-      {
-	if (b.name != name) bodies.push_back(b);
-	else _self = b;
-      }
-  }
-
-  void pCallback(Body &b, const mpointer & pm, const dsaam::Time &)
-  {
-    if(!pm) return;
-    auto pmp = static_cast<const PMessage *>(pm.get());
-    //std::cout << dsaam::to_string("[", pmp->time, "]", "[",_self.name,"] pos update of ", b.name,
-    //				  " next at ",nextAt)
-    //	      << std::endl;
-    b.p = pmp->p;
-  }
-  
-  void vCallback(Body & b, const mpointer & pm,  const dsaam::Time &)
-  {
-    if(!pm) return;
-    auto pmv = static_cast<const VMessage *>(pm.get());
-    //std::cout << dsaam::to_string("[", pmv->time, "]", "[",_self.name,"] spe update of ", b.name,
-    //				  " next at ",nextAt)
-    //	      << std::endl;
-    b.v = pmv->v;
-  }
-
-  void integrate(const dsaam::Time & dt)
-  {
-    _self.integrate(bodies, double(dt));
-  }
-
-  const Body & self()
-  {
-    return _self;
-  }
-
-  Body& get_body(const string &name)
-  {
-    for(auto &b : bodies) if (b.name == name) return b;
-    throw std::domain_error(name);
-  }
-  
-private:
-  Body _self;
-  const dsaam::Time dt; 
-  std::vector<Body> bodies;
+  PMessage(const Array2d & p, const dsaam::Time & t)
+    : MessageBase(t), p(p) {}
+public:
+  Array2d p;
 };
+
+class VMessage : public MessageBase
+{
+public:
+  VMessage(const Array2d & v, const dsaam::Time & t)
+    : MessageBase(t), _filler_("filler"), v(v) {}
+public:
+  string _filler_;
+  Array2d v;
+};
+
+
+
+void p_callback(Body &b, const mpointer & pm, const dsaam::Time &)
+{
+  if(!pm) return;
+  auto pmp = static_cast<const PMessage *>(pm.get());
+  //std::cout << dsaam::to_string("[", pmp->time, "]", "[",_self.name,"] pos update of ", b.name,
+  //				  " next at ",nextAt)
+  //	      << std::endl;
+  b.p = pmp->p;
+}
+  
+void v_callback(Body & b, const mpointer & pm,  const dsaam::Time &)
+{
+  if(!pm) return;
+  auto pmv = static_cast<const VMessage *>(pm.get());
+  //std::cout << dsaam::to_string("[", pmv->time, "]", "[",_self.name,"] spe update of ", b.name,
+  //				  " next at ",nextAt)
+  //	      << std::endl;
+  b.v = pmv->v;
+}
 
 
 using TTransport = dsaam::ThreadTransport<MessageBase, dsaam::Time, FMessageTime>;
@@ -198,66 +74,40 @@ using InFlow = TTransport::InFlow;
 using OutFlow = TTransport::OutFlow;
 using Sink = TTransport::Sink;
 
-class OneBSystemNode : public dsaam::OneThreadNode<TTransport>
+class OneBSystemNode : public OneBSystemNodeBase<TTransport>
 {
 public:
   OneBSystemNode(std::vector<Body> & bodies, string &name, dsaam::Time &time, dsaam::Time &dt,
 		 unsigned int max_qsize, const dsaam::Time &stop_time)
-    : dsaam::OneThreadNode<TTransport>(name,time,dt,max_qsize),
-    system(name, bodies, time), stop_time(stop_time)
+    : OneBSystemNodeBase<TTransport>(bodies, name, time, dt, max_qsize, stop_time)
   {
   }
 
-  virtual void init()
-  {
-    //init send callbacks
-    send_p = send_callback(name + "/position");
-    send_v = send_callback(name + "/speed");
-
-    //send init position and speed
-    send_state(time());
-  }
-
-  virtual void step(const dsaam::Time & to)
-  {
-    //std::cout << to_string("[",time(),"] [",name,"] Stepping to ",to) << std::endl;
-    system.integrate(to - time());
-    //send updated position and speed
-    send_state(to);
-    if(to + dt > stop_time) stop();
-
-  }
-
-  message_callback_type pCallback(const string &b_name)
+  message_callback_type pCallback(const string &b_name) override
   {
     Body & b = system.get_body(b_name);
-    return std::bind(&OneBodySystem::pCallback, &system, b,
+    return std::bind(&p_callback, std::ref(b),
 		     std::placeholders::_1, std::placeholders::_2);
   }
 
-  message_callback_type vCallback(const string &b_name)
+  message_callback_type vCallback(const string &b_name) override
   {
     Body & b = system.get_body(b_name);
-    return std::bind(&OneBodySystem::vCallback, &system, b,
+    return std::bind(&v_callback,  std::ref(b),
 		     std::placeholders::_1, std::placeholders::_2);
   }
   
-private:
-  void send_state(dsaam::Time t)
+protected:
+  void send_state(const dsaam::Time & t) override
   {
     mpointer m = \
-      mpointer(new OneBodySystem::PMessage(system.self().p, t));
+      mpointer(new PMessage(system.self().p, t));
     send_p(std::move(m));
      
     
-    m = mpointer(new OneBodySystem::VMessage(system.self().v, t));
+    m = mpointer(new VMessage(system.self().v, t));
     send_v(std::move(m));
   }
-
-  OneBodySystem system;
-  dsaam::Time stop_time;
-  send_callback_type send_p;
-  send_callback_type send_v;
 };
 
 int main()

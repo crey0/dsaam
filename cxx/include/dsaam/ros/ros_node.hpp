@@ -1,16 +1,12 @@
 #ifndef DSAAM_ROS_NODE_HPP
 #define DSAAM_ROS_NODE_HPP
 
-#include <dsaam/node.hpp>
-
 #include<ros/ros.h>
 #include<std_msgs/Header.h>
 
+#include <dsaam/node.hpp>
+
 /*TODO:
-  P0: IDEA: Change library template structure to Node<TRANSPORT_TYPE> with
-  transport_type::message_pointer, transport_type::time, transport_type::get_time...
-  Then we have Node : public TransportType.
-  Is this feasible ???
   P1 : Subscriber callbacks need to be passed with bare method pointers + object
   P2 : SubscriberStatusCallback is a typedef for boost::function !
   P3 : Check if it will give us boost::shared_pointer or std::shared_pointer (unclear)
@@ -102,40 +98,41 @@ namespace dsaam::ros
   };
   
   template<class M = std_msgs::Header, class T = ros::Time, class FMT = ros_header_stamp>
-  class RosNode : public FMT
+  class RosTransport : public FMT
   {
   public:
 
     using message_type=M;
+    using message_cptr=boost::shared_ptr;
     using time_type=T;
     using extract_message_time=FMT;
     
-    RosNode(T &time, T &dt, std::vector<InFlow> &inflows,
-	    std::vector<OutFlow> &outflows, unsigned int max_qsize)
-      : Node(time, dt, inflows, outflows, max_qsize)
+    RosTransport()
     {
       
-      size_t sub_count = inflows.size(); 
+      // size_t sub_count = inflows.size(); 
       
-      //Setup outflows
-      for(auto &outf : outflows)
-	{
-	  sub_count += outf.sinks.size()
-	    for(auto &s : outf.sinks)
-	      {
-		auto cb = std::bind<void(const &T)>(&RosNode<F, M, FMT>::_ros_receive_time, this,
-						    time_callback(outf.name, s.name), _1);
-		subs.push_back(n.subscribe(this->name + "/time/" + sname, max_qsize, cb));
-	      }
-	}
+      // //Setup outflows
+      // for(auto &outf : outflows)
+      // 	{
+      // 	  sub_count += outf.sinks.size()
+      // 	    for(auto &s : outf.sinks)
+      // 	      {
+      // 		auto cb = std::bind<void(const &T)>(&RosNode<F, M, FMT>::_ros_receive_time, this,
+      // 						    time_callback(outf.name, s.name), _1);
+      // 		subs.push_back(n.subscribe(this->name + "/time/" + sname, max_qsize, cb));
+      // 	      }
+      // 	}
 
-      sub_listener = std::unique_ptr(new CountSubListener(sub_count));
+      // sub_listener = std::unique_ptr(new CountSubListener(sub_count));
 
       
     }
 
+    
+
     template<class S, class = std::enable_if<std::is_convertible<S, M>::value > = 0>
-    void set_inflow_callback(const string & ifname,
+    void setup_inflow(const string & ifname,
 			     const dsaam::message_callback_type<S, T> &m_cb)
     {
       //Setup ROS subscriber
@@ -146,15 +143,29 @@ namespace dsaam::ros
       auto message_cwrapper = message_conversion_callback<S>(m_cb);
       auto time_callback = _ros_out_time_callback(ifname);
       dsaam::Node<M, T, FMT>::set_inflow_callbacks(ifname, message_cwrapper, t_cb);
+      //create inflow
     }
 
     template<class S, class = std::enable_if<std::is_convertible<S, M>::value > = 0>
-    void set_outflow_callback(const string &ifname)
+    void setup_outflow(const string &ifname)
     {
       pubs.push_back(n.advertise<FMT::time_message_type>(ifname + "/time/" + this->name, max_qsize,
 							 sub_listener->peer_subscribe_callback()));
+      //create ouflow and setup sinks
+    }
+
+    virtual void setup_inflow(InFlow&)
+    {
     }
     
+    virtual void setup_outflow(OutFlow&)
+    {      
+    }
+
+    virtual void setup_sink(const string &, Sink &)
+    {
+    }
+
     
   private:
 
