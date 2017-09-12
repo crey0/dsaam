@@ -33,36 +33,49 @@ namespace dsaam
     using function_type = typename ThreadTypes<M,T>::template function_type<F>;
     using typename ThreadTypes<M,T>::send_callback_type;
 
-    using InFlow = ::dsaam::InFlow<message_cptr, time_type, function_type>;
-
     struct Sink : ::dsaam::Sink
     {
-      Sink(const string &flow_name, const string& name, ThreadTransport & node)
-	: ::dsaam::Sink(name)
+      Sink(const string &flow_name, Node<ThreadTransport> & node)
+	: ::dsaam::Sink(node.name)
       {
-	send = node.push_callback(flow_name);
+	send = ((ThreadTransport & )node).push_callback(flow_name);
       }
       send_callback_type send;
     };
 
     struct OutFlow :  ::dsaam::OutFlow<message_cptr, time_type, function_type, Sink>
     {
-      OutFlow(string name, const time_type &time, const time_type &dt, const std::vector<Sink> &sinks)
-	:  ::dsaam::OutFlow<message_cptr, time_type, function_type, Sink>(name,time,dt,sinks)
+      OutFlow(string name, const time_type &time, const time_type &dt,
+	      const std::vector<Sink> &sinks = {}, size_t qsize = 0)
+	:  ::dsaam::OutFlow<message_cptr, time_type, function_type, Sink>(name,time,dt,sinks, qsize)
       {
-	using std::placeholders::_1;
-	this->send = std::bind(&OutFlow::_send, this, _1);
+	//using std::placeholders::_1;
+	//this->send = std::bind(&OutFlow::_send, this, _1);
       }
-    protected:
-      void _send(const message_cptr & m)
+
+      void send(const message_cptr & m)
       {
 	for(auto &s : this->sinks)
 	  {
 	    s.send(m);
 	  }
+      }      
+    };
+
+    struct InFlow : ::dsaam::InFlow<message_cptr, time_type, function_type>
+    {
+      InFlow(string name,
+	     const time_type& time, const time_type &dt,
+	     const message_callback_type<message_cptr,time_type,function_type> &callback,
+	     size_t qsize=0)
+	: ::dsaam::InFlow<message_cptr, time_type, function_type>(name, time, dt, qsize, callback)
+      {}
+
+      void time_callback(const time_type&)
+      {
       }
     };
-    
+
     
     virtual void setup_inflow(InFlow&)
     {
@@ -70,6 +83,10 @@ namespace dsaam
     
     virtual void setup_outflow(OutFlow&)
     {      
+    }
+
+    virtual void setup_sink(const string &, Sink &)
+    {
     }
     
   protected:

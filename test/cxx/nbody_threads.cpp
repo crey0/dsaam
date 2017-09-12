@@ -152,6 +152,7 @@ public:
 
   void pCallback(Body &b, const mpointer & pm, const dsaam::Time &)
   {
+    if(!pm) return;
     auto pmp = static_cast<const PMessage *>(pm.get());
     //std::cout << dsaam::to_string("[", pmp->time, "]", "[",_self.name,"] pos update of ", b.name,
     //				  " next at ",nextAt)
@@ -161,6 +162,7 @@ public:
   
   void vCallback(Body & b, const mpointer & pm,  const dsaam::Time &)
   {
+    if(!pm) return;
     auto pmv = static_cast<const VMessage *>(pm.get());
     //std::cout << dsaam::to_string("[", pmv->time, "]", "[",_self.name,"] spe update of ", b.name,
     //				  " next at ",nextAt)
@@ -204,12 +206,14 @@ public:
     : dsaam::OneThreadNode<TTransport>(name,time,dt,max_qsize),
     system(name, bodies, time), stop_time(stop_time)
   {
-    send_p = send_callback(name + "/position");
-    send_v = send_callback(name + "/speed");
   }
 
   virtual void init()
   {
+    //init send callbacks
+    send_p = send_callback(name + "/position");
+    send_v = send_callback(name + "/speed");
+
     //send init position and speed
     send_state(time());
   }
@@ -268,11 +272,6 @@ int main()
 			       {"green_0"},
 			       {"red_0", "green_0", "blue_0"}};
   
-  std::vector<string> outs[] = {{"green_0", "yellow_0"},
-				{"blue_0", "yellow_0"},
-				{"yellow_0"},
-				{"red_0"}};
-  
   
   Array2d positions[] = {{{0.5,  0.5}},
 		       {{0.3,  0.3}},
@@ -315,6 +314,13 @@ int main()
       nodes.emplace_back(all_bodies,
 			 names[i], start_time, dts[i],
 			 max_qsize, dsaam::Time(10000));
+      auto bp = names[i] + "/position";
+      auto bs = names[i] + "/speed";
+      OutFlow outflow = {bp, start_time, dts[i]};
+      nodes.back().setup_outflow(outflow);
+      outflow = {bs, start_time, dts[i]};
+      nodes.back().setup_outflow(outflow);
+      
     }
 
   auto get_node = [&](string name) -> OneBSystemNode&
@@ -334,30 +340,22 @@ int main()
 	  auto & nj = get_node(j_name);
 	  auto jp = j_name + "/position";
 	  auto js = j_name + "/speed";
-	  auto inflow = InFlow(jp, start_time, nj.dt);
+
+	  auto inflow = InFlow(jp,  start_time, nj.dt, n.pCallback(j_name));
 	  n.setup_inflow(inflow);
-	  inflow = InFlow(js, start_time, nj.dt);
+	  Sink sink = {jp, n};
+	  nj.setup_sink(jp, sink),
+	    
+	  inflow = InFlow(js, start_time, nj.dt, n.vCallback(j_name));
 	  n.setup_inflow(inflow);
+	  sink = {js, n};
+	  nj.setup_sink(js, sink);
+	  
 	  //n.set_inflow_callbacks(jp, n.pCallback(j_name), nj.time_callback(jp, n.name));
 	  //n.set_inflow_callbacks(js, n.vCallback(j_name), nj.time_callback(js, n.name));
 
 	}
-
-      std::vector<Sink> sinks_p;
-      std::vector<Sink> sinks_v;
-      for(size_t j=0; j < outs[i].size(); j++)
-	{
-	  string j_name = outs[i][j];
-	  auto & nj = get_node(j_name);
-	  sinks_p.emplace_back(bp, nj.name, nj);
-	  sinks_v.emplace_back(bs, nj.name, nj);
-	  //n.set_outflow_callback(bp, j_name, nj.push_callback(bp));
-	  //n.set_outflow_callback(bs, j_name, nj.push_callback(bs));
-	}
-      OutFlow outflow = {bp, start_time, dts[i], sinks_p};
-      n.setup_outflow(outflow);
-      outflow = {bs, start_time, dts[i], sinks_v};
-      n.setup_outflow(outflow);
+      
     }
 
   //start Nodes

@@ -3,6 +3,7 @@
 
 #include<dsaam/queue.hpp>
 #include<dsaam/binary_heap.hpp>
+#include<deque>
 
 namespace dsaam
 {
@@ -72,10 +73,13 @@ namespace dsaam
 		    new MessageQueue<M, T, FMT>(time, flow.dt,
 						flow.qsize>0?flow.qsize:default_qsize));
       queues.push_back(std::move(p));
+      inflows.push_back(flow);
+      
       size_t index = queues.size()-1;
-      typename heap_type::handle_type h = heap.push(heap_data(flow,
-							      *this->queues[index]));
+      typename heap_type::handle_type h = heap.push(heap_data(inflows.back(),
+						    *this->queues[index]));
       (*h).value.handle = h;
+      
     }
     
     unsigned int flow_index(const string & name) const
@@ -117,7 +121,7 @@ namespace dsaam
     }
     
   public:
-    std::vector<InFlow> inflows;
+    std::deque<InFlow> inflows;
     T time;
     unsigned int default_qsize;
     heap_type heap;

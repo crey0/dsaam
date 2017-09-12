@@ -28,6 +28,7 @@ namespace dsaam
     using send_callback_type = ::dsaam::send_callback_type<message_cptr, function_type>;
     using InFlow = typename transport_type::InFlow;
     using OutFlow = typename transport_type::OutFlow;
+    using Sink = typename transport_type::Sink;
 
     Node(string &name, time_type &time, unsigned int default_qsize = 0) :
       name(name), _time(time), default_qsize(default_qsize),
@@ -77,8 +78,14 @@ namespace dsaam
     {
       flow.qsize = flow.qsize > 0 ? flow.qsize : default_qsize;
       transport_type::setup_outflow(flow);
-      this->outflows.emplace_back(flow);
+      outflows.emplace_back(flow);
  
+    }
+
+    virtual void setup_sink(const string &outflow, Sink &sink) override
+    {
+      transport_type::setup_sink(outflow, sink);
+      outflows.at(_out_flow_index(outflow)).setup_sink(sink);
     }
 
 
@@ -107,10 +114,10 @@ namespace dsaam
 		   to_string("Time contract breached: sending message at ",
 			     transport_type::time(m), " before arrival of next message at ",
 			     inflows.nextTime()));
-      logic_assert(transport_type::time(m) == outflow->time + outflow->dt,
+      logic_assert(transport_type::time(m) == outflow->time,
 		   to_string("Time contract breached : Invalid message time expected ",
 			     outflow->time + outflow->dt, " got ", transport_type::time(m)));
-      outflow->time = transport_type::time(m);
+      outflow->time = outflow->time + outflow->dt;
       
       outflow->send(m);
     }
@@ -121,7 +128,7 @@ namespace dsaam
 	{
 	  if(outflows[i].name == name) return i;
 	}
-      throw  std::domain_error("No outflow "+name+" defined on this node");
+      throw  std::domain_error("No outflow "+name+" defined on this node ("+this->name+")");
     }
 
     unsigned int _out_flow_sink_index(unsigned int flow, const string & name) const

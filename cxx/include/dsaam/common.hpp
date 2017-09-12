@@ -47,8 +47,8 @@ namespace dsaam
     T time;
     T dt;
     size_t qsize;
-    message_callback_type<M, T,F> callback;
-    time_callback_type<T,F> time_callback;
+    message_callback_type<M, T, F> callback;
+    time_callback_type<T, F> time_callback;
   };
   
   struct Sink
@@ -63,8 +63,14 @@ namespace dsaam
   struct OutFlow
   {
     OutFlow() = default;
-    OutFlow(string name, const T& time, const T& dt, std::vector<S> sinks, size_t qsize = 0)
+    OutFlow(string name, const T& time, const T& dt, std::vector<S> sinks = {}, size_t qsize = 0)
       : name(name), time(time), dt(dt), qsize(qsize), send(), sinks(sinks) {}
+
+    void setup_sink(S &sink)
+    {
+      sinks.push_back(sink);
+    }
+    
     string name;
     T time;
     T dt;
