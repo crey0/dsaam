@@ -2,8 +2,8 @@
 #define DSAAM_ROS_NODE_HPP
 
 #include<ros/ros.h>
+#include<ros/message_traits.h>
 #include<std_msgs/Header.h>
-
 #include <dsaam/node.hpp>
 
 /*TODO:
@@ -14,57 +14,42 @@
   P4 : Finish implementing all the init
 
 */
-namespace dsaam::ros
+namespace dsaam { namespace ros
 {
 
-  template<class P1, class P2, class... Args>
-  struct message_conversion_callback
-  {
-    std::function<void(P2, Args...)> callback_type;
-    
-    message_conversion_callback(callback_type & callback) : callback(callback) {}
 
-    void operator()(P1 &p1, Args... args)
-    {
-      P2 p2 = std::static_pointer_cast<P2>(p1);
-      callback(p2, &args...);
-    }
-    
-    callback_type callback;
-  };
-
-	
+  
   class CountSubListener
   {
   public:
-    RosSubscriptionWaiter(size_t num_peers) : num_peers(num_peers), sub_sem(0) {}
+    CountSubListener(size_t num_peers) : num_peers(num_peers), sub_sem(0) {}
 
     void peer_subscribe(ros::SingleSubscriberPublisher & sub)
     {
-      sub_sem.release();
+      sub_sem.decrease();
     }
 
     auto peer_subscribe_callback()
     {
-      return std::bind(&CountSubListener::peer_subscribe, this);
+      return boost::bind(&CountSubListener::peer_subscribe, this);
     }
 
     void peer_unsubscribe(ros::SingleSubscriberPublisher & sub)
     {
       throw std::runtime_error(to_string("No unsubscription allowed for topic ",sub.getTopic(),
-					 " requested by ",sub.getSubscriberName(),"\n")),
+					 " requested by ",sub.getSubscriberName(),"\n"));
 	}
 
     auto peer_unsubscribe_callback()
     {
-      return std::bind(&CountSubListener::peer_unsubscribe, this);
+      return boost::bind(&CountSubListener::peer_unsubscribe, this);
     }
 
     void wait()
     {
       for(int i=0; i< num_peers; i++)
 	{
-	  sub_sem.acquire();
+	  sub_sem.increase();
 	}
     }
     
@@ -73,15 +58,69 @@ namespace dsaam::ros
     Semaphore sub_sem;
     
   };
+
+  struct ROSMessagePointerHolder;
+  using message_type = ROSMessagePointerHolder;
+  using message_cptr = boost::shared_ptr<const message_type>;
+  using void_cptr = boost::shared_ptr<const void>;
+  using time_type = ros::Time;
+  template<F>
+  using function_type = boost::function<F>;
+  
+  template<class M>
+  const time_type& message_timestamp(const void_cptr& m)
+  {
+    return *ros::message_traits::TimeStamp<M>(*static_cast<const M*>(m.get()));
+  }
+
+  
+  struct ROSMessagePointerHolder
+  {
+    template<class M> ROSMessagePointerHolder(boost::shared_ptr<const M> && m)
+      : m(m), time(&message_timestamp<P>)
+    {}
+
+    const ros::Time & time()
+    {
+      return timestamp_fun(m);
+    }
+
+    template<class P>
+    P get()
+    {
+      return boost::static_pointer_cast<P>(m);
+    }
+
+  private:
+    const void_cptr m;
+    const ros::Time & (*timestamp_fun)(const void_cptr&);
+  }
+
+  template<class P1, class P2, class... Args>
+  struct message_conversion_callback
+  {
+    using callback_type = boost::function<void(P2, Args...)>;
+    
+    message_conversion_callback(const callback_type &callback) : callback(callback) {}
+
+    void operator()(P1 &p1, Args... args)
+    {
+      P2 p2 = boost::static_pointer_cast<P2>(std::move(p1));
+      callback(p2, &args...);
+    }
+    
+    callback_type callback;
+  };
   
   struct ros_header_stamp
   {
+    using message_type = void;
     using time_message_type=std_msgs::Header;
-    using mpointer=boost::shared_ptr<time_message_type>;
+    using mpointer=boost::shared_ptr<const RosMessagePointerHolder>;
     
     static const ros::Time& time(const mpointer &m)
     {
-      return m->header.stamp;
+      return m.time();
     }
 
     static std_msgs::Header time_message(const ros::Time &t)
@@ -91,21 +130,21 @@ namespace dsaam::ros
       return h;
     }
 
-    static const ros::Time & time_message(const std::shared_pointer<const std_msgs::Header> &m)
+    static const ros::Time & time_message(const boost::shared_ptr<const time_message_type> &m)
     {
       return m->header.stamp;
     }
   };
   
-  template<class M = std_msgs::Header, class T = ros::Time, class FMT = ros_header_stamp>
-  class RosTransport : public FMT
+  class RosTransport : public ros_header_stamp
   {
   public:
 
-    using message_type=M;
-    using message_cptr=boost::shared_ptr;
-    using time_type=T;
-    using extract_message_time=FMT;
+    using ::dsaam::ros::message_type;
+    using ::dsaam::ros::message_cptr;
+    using ::dsaam::ros::time_type;
+    using ::dsaam::ros::ros_header_stamp;
+    using ros_header_stamp::time_message_type;
     
     RosTransport()
     {
@@ -132,7 +171,7 @@ namespace dsaam::ros
     
 
     template<class S, class = std::enable_if<std::is_convertible<S, M>::value > = 0>
-    void setup_inflow(const string & ifname,
+    void setup_subscriber(const string & ifname,
 			     const dsaam::message_callback_type<S, T> &m_cb)
     {
       //Setup ROS subscriber
@@ -147,7 +186,7 @@ namespace dsaam::ros
     }
 
     template<class S, class = std::enable_if<std::is_convertible<S, M>::value > = 0>
-    void setup_outflow(const string &ifname)
+    void setup_publisher(const string &ifname)
     {
       pubs.push_back(n.advertise<FMT::time_message_type>(ifname + "/time/" + this->name, max_qsize,
 							 sub_listener->peer_subscribe_callback()));
@@ -171,25 +210,27 @@ namespace dsaam::ros
 
     auto _ros_out_time_callback(const string &ifname)
     {
-      pubs.push_back(n.advertise<FMT::time_message_type>(ifname + "/time/" + this->name, max_qsize,
+      pubs.push_back(n.advertise<time_message_type>(ifname + "/time/" + this->name, max_qsize,
 							 sub_listener->peer_subscribe_callback()));
       auto &pub = pubs.back();
       using std::placeholders::_1;
-      return std::bind<void(const &T)>(&RosNode<F, M, FMT>::_ros_publish_time, this, pub, _1);
+      return std::bind<void(const &T)>(&RosTransport::_ros_publish_time, this, pub, _1);
     }
 
-    void _ros_receive_time(const time_callback_type& cb, const FMT::time_message_type &time)
+    void _ros_receive_time(const time_callback_type& cb, const time_message_type &time)
     {
-      cb(FMT::time_message(time));
+      cb(time_message(time));
     }
     
-    void _ros_publish_time(ros::Publiser & pub, const T &time)
+    void _ros_publish_time(ros::Publisher & pub, const T &time)
     {
-      auto m = FMT::time_message(t);
+      auto m = time_message(t);
       pub.publish(m);
     }
 
-
+    virtual typename send_callback_type push_callback(size_t flow) = 0;
+    virtual typename send_callback_type push_callback(const string & name) = 0;
+    
   private:
     ros::NodeHandle n;
     std::vector<ros::Subscriber> subs;
@@ -208,6 +249,5 @@ namespace dsaam::ros
     std::vector<OutFlow> outflows(TODO);
   }
   
-}
-
+}}
 #endif
