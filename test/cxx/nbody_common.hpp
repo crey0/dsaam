@@ -132,8 +132,9 @@ public:
   using typename node_type::send_callback_type;
   using typename node_type::message_callback_type;
 
-  OneBSystemNodeBase(std::vector<Body> & bodies, string &name, dsaam::Time &time, dsaam::Time &dt,
-		 unsigned int max_qsize, const dsaam::Time &stop_time)
+  OneBSystemNodeBase(std::vector<Body> & bodies,
+		     string &name, const time_type &time, const time_type &dt, size_t max_qsize,
+		     const time_type &stop_time)
     : dsaam::OneThreadNode<TTransport>(name,time,dt,max_qsize),
     system(name, bodies), stop_time(stop_time)
   {
@@ -158,10 +159,6 @@ public:
     if(to + this->dt > stop_time) this->stop();
 
   }
-
-  virtual message_callback_type pCallback(const string &b_name) = 0;
-
-  virtual message_callback_type vCallback(const string &b_name) = 0;
  
 protected:
   virtual void send_state(const time_type &t) = 0;

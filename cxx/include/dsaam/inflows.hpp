@@ -119,9 +119,10 @@ namespace dsaam
    
       return q.queue.nextAt();
     }
-    
+
   public:
     std::deque<InFlow> inflows;
+  private:
     T time;
     unsigned int default_qsize;
     heap_type heap;

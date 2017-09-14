@@ -105,7 +105,7 @@ namespace dsaam
     using OutFlow=typename Node<T>::OutFlow;
     using time_type=typename Node<T>::time_type;
     
-    OneThreadNode(string &name, time_type &time, time_type &dt, unsigned int max_qsize)
+    OneThreadNode(const string &name, const time_type &time, const time_type &dt, size_t max_qsize)
       : Node<T>(name,time,max_qsize), dt(dt), stopped(false),
 	_thread() {} 
     

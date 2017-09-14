@@ -83,20 +83,20 @@ public:
   {
   }
 
-  message_callback_type pCallback(const string &b_name) override
+  message_callback_type pCallback(const string &b_name)
   {
     Body & b = system.get_body(b_name);
     return std::bind(&p_callback, std::ref(b),
 		     std::placeholders::_1, std::placeholders::_2);
   }
 
-  message_callback_type vCallback(const string &b_name) override
+  message_callback_type vCallback(const string &b_name)
   {
     Body & b = system.get_body(b_name);
     return std::bind(&v_callback,  std::ref(b),
 		     std::placeholders::_1, std::placeholders::_2);
   }
-  
+
 protected:
   void send_state(const dsaam::Time & t) override
   {

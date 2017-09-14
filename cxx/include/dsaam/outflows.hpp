@@ -6,7 +6,7 @@
 namespace dsaam
 {
   template<class M, class T, template <class> class F, class FMT>
-  class OutMessageFlow
+  class OutMessageFlow : public OutFlow<M, T, F>
   {
     struct heap_data;
     typedef binary_heap<struct heap_data> heap_type;
@@ -24,12 +24,12 @@ namespace dsaam
     
     
   public:
-    OutMessageFlow(string name, T start_time, T dt, OutFlow<M,T,F>& outflow,
-		   unsigned int max_qsize)
-      :  name(name), max_qsize(max_qsize), next_time(start_time), dt(dt), outflow(outflow),
+    OutMessageFlow(string name, T start_time, T dt, std::vector<Sink>& sinks,
+		   size_t max_qsize)
+      :  OutFlow<M, T, F>(name, start_time, dt, sinks, max_qsize),
 	 heap(), heap_handles()
     {
-      for(size_t i = 0; i < outflow.sinks.size(); i++)
+      for(size_t i = 0; i < this->sinks.size(); i++)
 	{
 	  typename heap_type::handle_type h = heap.push(0);
 	  h->value.h = h;
@@ -49,7 +49,7 @@ namespace dsaam
 	heap.decrease(h);
 	top = heap.top().v;
       }
-      if (top < max_qsize)
+      if (top < this->qsize)
 	cv.notify_one();
     }
     
@@ -57,7 +57,7 @@ namespace dsaam
     {
     
       std::unique_lock<std::mutex> lk(this->m);
-      cv.wait(lk, [this]{return heap.top().v < max_qsize;});
+      cv.wait(lk, [this]{return heap.top().v < this->qsize;});
       for(auto h : heap_handles)
 	{
 	  h->value.v += 1;
@@ -65,19 +65,14 @@ namespace dsaam
       lk.unlock();
       cv.notify_one();
 
-      outflow.send(message);
+      OutFlow<M,T,F>::send(message);
       
-      next_time  = next_time + dt;
+      this->time  = this->time + this->dt;
     }
-    
-  public:
-    const string name;
-
   private:
-    unsigned int max_qsize;
-    T next_time;
-    T dt;
-    OutFlow<M,T,F> outflow;
+    void setup_sink(Sink&) = delete;
+    
+  private:
     heap_type heap;
     std::vector<typename heap_type::handle_type> heap_handles;
     std::mutex m;

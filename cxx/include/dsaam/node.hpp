@@ -30,7 +30,7 @@ namespace dsaam
     using OutFlow = typename transport_type::OutFlow;
     using Sink = typename transport_type::Sink;
 
-    Node(string &name, time_type &time, unsigned int default_qsize = 0) :
+    Node(const string &name, const time_type &time, size_t default_qsize = 0) :
       name(name), _time(time), default_qsize(default_qsize),
       inflows(time, default_qsize), outflows()
     {}
@@ -70,22 +70,23 @@ namespace dsaam
     
     virtual void setup_inflow(InFlow& flow) override
     {
-      transport_type::setup_inflow(flow);
       inflows.setup_inflow(flow);
+      transport_type::setup_inflow(inflows.inflows.back());
     }
 
     virtual void setup_outflow(OutFlow &flow) override
     {
       flow.qsize = flow.qsize > 0 ? flow.qsize : default_qsize;
-      transport_type::setup_outflow(flow);
       outflows.emplace_back(flow);
+      transport_type::setup_outflow(outflows.back());
  
     }
 
     virtual void setup_sink(const string &outflow, Sink &sink) override
     {
-      transport_type::setup_sink(outflow, sink);
-      outflows.at(_out_flow_index(outflow)).setup_sink(sink);
+      OutFlow & flow = outflows.at(_out_flow_index(outflow));
+      flow.setup_sink(sink);
+      transport_type::setup_sink(outflow, flow.sinks.back());
     }
 
 
