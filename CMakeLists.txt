@@ -34,3 +34,5 @@ find_package(Threads REQUIRED)
 
 add_executable(nbody_threads test/cxx/nbody_threads.cpp)
 target_link_libraries(nbody_threads dsaam Threads::Threads)
+
+add_subdirectory(test/ros/src)
