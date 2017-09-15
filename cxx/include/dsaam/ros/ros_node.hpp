@@ -1,24 +1,18 @@
 #ifndef DSAAM_ROS_NODE_HPP
 #define DSAAM_ROS_NODE_HPP
-
 #include<ros/ros.h>
+
+//Horrible hack. Maybe introduce a time and a duration type in DSAAM (seems standard)?
+namespace ros
+{
+  Time operator+(const Time& t1, const Time& t2)
+  {
+    return t1 + ros::Duration(t2.toNSec());
+  }
+}
 #include<ros/message_traits.h>
 #include<std_msgs/Header.h>
 #include <dsaam/node.hpp>
-
-/*TODO:
-  P1 : Subscriber callbacks need to be passed with bare method pointers + object
-  P2 : SubscriberStatusCallback is a typedef for boost::function !
-  P3 : Check if it will give us boost::shared_pointer or std::shared_pointer (unclear)
-  when using subscribe ???
-  P4 : Finish implementing all the init
-
-*/
-
-ros::Time operator+(const ros::Time& t1, const ros::Time& t2)
-{
-  return t1 + ros::Duration(t2.toNSec());
-}
 
 namespace dsaam { namespace ros
 {
@@ -82,6 +76,10 @@ namespace dsaam { namespace ros
   struct ROSMessagePointerHolder
   {
     template<class M> ROSMessagePointerHolder(boost::shared_ptr<const M> && m)
+      : m(m), timestamp_fun(&message_timestamp<M>)
+    {}
+
+    template<class M> ROSMessagePointerHolder(boost::shared_ptr<const M> & m)
       : m(m), timestamp_fun(&message_timestamp<M>)
     {}
 
@@ -187,10 +185,12 @@ namespace dsaam { namespace ros
 
     template<class S>
     typename std::enable_if<::ros::message_traits::HasHeader<S>::value>::type
-    setup_subscriber(const string & ifname, const string & name,
-		     const time_type& time, const time_type& dt, size_t max_qsize,
-		     const dsaam::message_callback_type<S, time_type, function_type> &m_cb)
+    setup_subscriber(const string & ifname,
+		     const time_type& time, const time_type& dt, 
+		     const dsaam::message_callback_type<S, time_type, function_type> &m_cb,
+		     size_t max_qsize = 0)
     {
+      auto name = ::ros::this_node::getName();
       //Setup ROS subscriber
       auto cb = this->push_callback(ifname);
       subs.push_back(n.subscribe<S>(ifname, max_qsize, cb));
@@ -200,7 +200,7 @@ namespace dsaam { namespace ros
       auto time_callback = _ros_out_time_callback(ifname, name, max_qsize);
       //create inflow
       auto flow = InFlow(ifname, time, dt, max_qsize, message_cwrapper, time_callback);
-      setup_inflow(flow);
+      setup_inflow(std::move(flow));
     }
 
     template<class S>
@@ -218,7 +218,7 @@ namespace dsaam { namespace ros
       std::vector<Sink> sinks = {begin(subscribers), end(subscribers)};
       //create ouflow and setup sinks
       OutFlow flow {name, time, dt, sinks, max_qsize };
-      setup_outflow(flow);
+      setup_outflow(std::move(flow));
     }
 
     virtual void setup_inflow(InFlow&)
@@ -227,7 +227,7 @@ namespace dsaam { namespace ros
     
     virtual void setup_outflow(OutFlow& flow)
     {
-      auto name = ::ros::this_node::getName();
+      auto name = flow.name;
       for(size_t i = 0; i < flow.sinks.size(); i++)
 	{
 	  auto &s = flow.sinks[i];
@@ -242,7 +242,10 @@ namespace dsaam { namespace ros
     virtual void setup_sink(const string &, Sink &)
     {
     }
-
+  protected:
+    virtual void setup_inflow(InFlow&&) = 0;
+    virtual void setup_outflow(OutFlow&&) = 0;
+    virtual void setup_sink(const string &, Sink &&) = 0;
     
   private:
 

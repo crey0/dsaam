@@ -76,7 +76,7 @@ namespace dsaam
       this->time  = this->time + this->dt;
     }
     
-    void setup_sink(Sink&)
+    void setup_sink(Sink&&)
     {
       throw std::runtime_error("Method not implemented");
     }

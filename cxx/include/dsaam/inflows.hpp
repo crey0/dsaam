@@ -67,13 +67,13 @@ namespace dsaam
       inflows(), time(time), default_qsize(default_qsize), heap(), queues()
     {}
 
-    void setup_inflow(InFlow flow)
+    void setup_inflow(InFlow&& flow)
     {
       auto p = std::unique_ptr<MessageQueue<M, T, FMT>>(
 		    new MessageQueue<M, T, FMT>(time, flow.dt,
 						flow.qsize>0?flow.qsize:default_qsize));
       queues.push_back(std::move(p));
-      inflows.push_back(flow);
+      inflows.push_back(std::move(flow));
       
       size_t index = queues.size()-1;
       typename heap_type::handle_type h = heap.push(heap_data(inflows.back(),

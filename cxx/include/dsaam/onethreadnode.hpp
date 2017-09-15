@@ -90,6 +90,10 @@ namespace dsaam
     }
     
   protected:
+    virtual void setup_inflow(InFlow&&) = 0;
+    virtual void setup_outflow(OutFlow&&) = 0;
+    virtual void setup_sink(const string &, Sink &&) = 0;
+    
     virtual typename ThreadTypes<M,T>::send_callback_type push_callback(size_t flow) = 0;
     virtual typename ThreadTypes<M,T>::send_callback_type push_callback(const string & name) = 0;
     

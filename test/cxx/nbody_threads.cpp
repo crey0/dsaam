@@ -166,10 +166,8 @@ int main()
 			 max_qsize, dsaam::Time(10000));
       auto bp = names[i] + "/position";
       auto bs = names[i] + "/speed";
-      OutFlow outflow = {bp, start_time, dts[i]};
-      nodes.back().setup_outflow(outflow);
-      outflow = {bs, start_time, dts[i]};
-      nodes.back().setup_outflow(outflow);
+      nodes.back().setup_outflow({bp, start_time, dts[i]});
+      nodes.back().setup_outflow({bs, start_time, dts[i]});
       
     }
 
@@ -191,15 +189,11 @@ int main()
 	  auto jp = j_name + "/position";
 	  auto js = j_name + "/speed";
 
-	  auto inflow = InFlow(jp,  start_time, nj.dt, n.pCallback(j_name));
-	  n.setup_inflow(inflow);
-	  Sink sink = {jp, n};
-	  nj.setup_sink(jp, sink),
+	  n.setup_inflow({jp,  start_time, nj.dt, n.pCallback(j_name)});
+	  nj.setup_sink(jp, {jp, n}),
 	    
-	  inflow = InFlow(js, start_time, nj.dt, n.vCallback(j_name));
-	  n.setup_inflow(inflow);
-	  sink = {js, n};
-	  nj.setup_sink(js, sink);
+	  n.setup_inflow({js, start_time, nj.dt, n.vCallback(j_name)});
+	  nj.setup_sink(js, {js, n});
 	  
 	  //n.set_inflow_callbacks(jp, n.pCallback(j_name), nj.time_callback(jp, n.name));
 	  //n.set_inflow_callbacks(js, n.vCallback(j_name), nj.time_callback(js, n.name));

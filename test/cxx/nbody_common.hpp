@@ -88,6 +88,8 @@ typedef struct Body
 
 }Body;
 
+template<class D> void to_double() {}
+
 class OneBodySystem
 {
 public:
@@ -102,9 +104,17 @@ public:
   }
 
   template<class D>
-  void integrate(const D & dt)
+  void integrate(const D & dt, decltype(double(dt)) = 0)
   {
     _self.integrate(bodies, double(dt));
+  }
+
+  template<class D>
+	   
+  auto integrate(const D & dt) -> \
+    typename std::enable_if<std::is_same<decltype(to_double(dt)), double>::value>::type
+  {
+    _self.integrate(bodies, to_double(dt));
   }
 
   const Body & self()

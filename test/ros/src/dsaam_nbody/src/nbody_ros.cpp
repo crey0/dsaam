@@ -1,4 +1,14 @@
 #include<dsaam/ros/ros_node.hpp>
+#include <map>
+#include <boost/assign/list_inserter.hpp>
+
+using namespace boost::assign;
+
+double to_double(const ros::Duration &t)
+{
+  return t.toSec();
+}
+
 #include<dsaam/time.hpp>
 #include<dsaam/onethreadnode.hpp>
 #include<dsaam_nbody/nbody_common.hpp>
@@ -9,6 +19,7 @@
 
 using pm_type = geometry_msgs::PointStamped;
 using vm_type = geometry_msgs::QuaternionStamped;
+
 
 void p_callback(Body &b, const boost::shared_ptr<const pm_type> & pm, const ros::Time&)
 {
@@ -83,7 +94,7 @@ time_type from_string(const string &nanos_s)
 }
 
 int main()
-{
+{    
   std::vector<Body> bodies;
 
   string name = ros::this_node::getName();
@@ -100,13 +111,9 @@ int main()
   size_t max_qsize = std::stoul(param);
 
   XmlRpc::XmlRpcValue ptree;
-  assert(ros::param::get("inflows", ptree));
-  for(auto &_pt : ptree)
+
+  auto add_body =  [&bodies](const string& b_name, XmlRpc::XmlRpcValue &bodyp) -> void
     {
-      auto pt = _pt.second;
-      string b_name = pt["name"];
-      XmlRpc::XmlRpcValue bodyp;
-      assert(ros::param::get("/"+b_name+"/body", bodyp));
       Array2d p_0,v_0;
       p_0[0] = double(bodyp["position"][0]);
       p_0[1] = double(bodyp["position"][1]);
@@ -116,22 +123,53 @@ int main()
       bodies.emplace_back(b_name, p_0, v_0,
 			  double(bodyp["mass"]), double(bodyp["radius"]),
 			  string(bodyp["color"]));
+    };
+  
+  assert(ros::param::get("body", ptree));
+  add_body(name, ptree);
+	   
+  assert(ros::param::get("inflows", ptree));
+  for(auto &_pt : ptree)
+    {
+      auto pt = _pt.second;
+      string b_name = pt["from"];
+      XmlRpc::XmlRpcValue bodyp;
+      assert(ros::param::get("/"+b_name+"/body", bodyp));
+      add_body(b_name, bodyp);
+     
     }
   auto node = OneBSystemNode(bodies, name, t, dt, max_qsize, stop_time);
 
+  auto get_body = [&bodies](const string &n) -> const string&
+    {
+      for(auto &b : bodies)
+	if(n.find(b.name) !=  std::string::npos) return b.name;
+      throw std::domain_error("Undefined body " + n);
+    };
+  
   //init subs
   for(auto &_pt : ptree)
     {
       auto pt = _pt.second;
-      string o_name = pt["name"];
-      time_type o_dt = from_string(string(pt["dt"]));
-      std::vector<string> sinks;
-      for(auto &s : pt["sinks"])
+      string i_name = pt["name"];
+      time_type i_dt = from_string(pt["dt"]);
+      const string &in_body_name = get_body(i_name);
+      
+      string type = pt["message_class"];
+      if(type == "geometry_msgs.msg.PointStamped")
 	{
-	  sinks.push_back(string(s.second));
+	  node.setup_subscriber<geometry_msgs::PointStamped>(i_name, t, i_dt,
+								  node.pCallback(in_body_name));
 	}
-      node.setup_publisher<geometry_msgs::PointStamped>(o_name+"/p", t, o_dt, sinks);
-      node.setup_publisher<geometry_msgs::PointStamped>(o_name+"/s", t, o_dt, sinks);
+      else if(type == "geometry_msgs.msg.QuaternionStamped")
+	{
+	  node.setup_subscriber<geometry_msgs::QuaternionStamped>(i_name, t, i_dt,
+								  node.vCallback(in_body_name));
+	} 
+      else
+	{
+	  throw std::domain_error("Unknown message type" + type);
+	}
     }
   
   //init pubs
@@ -139,7 +177,27 @@ int main()
   for(auto &_pt : ptree)
     {
       auto pt = _pt.second;
-      string f_name = string(pt["name"]);
+      string o_name = pt["name"];
+      time_type o_dt = from_string(pt["dt"]);
+      std::vector<string> sinks;
+      for(auto &s : pt["sinks"])
+	{
+	  sinks.push_back(string(s.second));
+	}
+      string type = pt["message_class"];
+      if(type == "geometry_msgs.msg.PointStamped")
+	{
+	  node.setup_publisher<geometry_msgs::PointStamped>(o_name, t, o_dt, sinks);
+	}
+      else if(type == "geometry_msgs.msg.QuaternionStamped")
+	{
+	  node.setup_publisher<geometry_msgs::QuaternionStamped>(o_name, t, o_dt, sinks);
+	}
+      
+      else
+	{
+	  throw std::domain_error("Unknown message type" + type);
+	}
     }
   
 

@@ -66,9 +66,9 @@ namespace dsaam
     OutFlow(string name, const T& time, const T& dt, const std::vector<S>& sinks = {}, size_t qsize = 0)
       : name(name), time(time), dt(dt), qsize(qsize), send(), sinks(sinks) {}
 
-    void setup_sink(S &sink)
+    void setup_sink(S &&sink)
     {
-      sinks.push_back(sink);
+      sinks.emplace_back(std::move(sink));
     }
     
     string name;

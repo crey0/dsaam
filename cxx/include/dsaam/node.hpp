@@ -68,24 +68,24 @@ namespace dsaam
       return inflows.nextTime();
     }
     
-    virtual void setup_inflow(InFlow& flow) override
+    virtual void setup_inflow(InFlow&& flow) override
     {
-      inflows.setup_inflow(flow);
+      inflows.setup_inflow(std::move(flow));
       transport_type::setup_inflow(inflows.inflows.back());
     }
 
-    virtual void setup_outflow(OutFlow &flow) override
+    virtual void setup_outflow(OutFlow&& flow) override 
     {
       flow.qsize = flow.qsize > 0 ? flow.qsize : default_qsize;
-      outflows.emplace_back(flow);
+      outflows.emplace_back(std::move(flow));
       transport_type::setup_outflow(outflows.back());
  
     }
 
-    virtual void setup_sink(const string &outflow, Sink &sink) override
+    virtual void setup_sink(const string &outflow, Sink && sink) override
     {
       OutFlow & flow = outflows.at(_out_flow_index(outflow));
-      flow.setup_sink(sink);
+      flow.setup_sink(std::move(sink));
       transport_type::setup_sink(outflow, flow.sinks.back());
     }
 
