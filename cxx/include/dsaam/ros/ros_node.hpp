@@ -14,6 +14,12 @@
   P4 : Finish implementing all the init
 
 */
+
+ros::Time operator+(const ros::Time& t1, const ros::Time& t2)
+{
+  return t1 + ros::Duration(t2.toNSec());
+}
+
 namespace dsaam { namespace ros
 {
   
@@ -22,25 +28,25 @@ namespace dsaam { namespace ros
   public:
     CountSubListener(size_t num_peers) : num_peers(num_peers), sub_sem(0) {}
 
-    void peer_subscribe(::ros::SingleSubscriberPublisher &)
+    void peer_subscribe(const ::ros::SingleSubscriberPublisher &)
     {
       sub_sem.decrease();
     }
 
     ::ros::SubscriberStatusCallback peer_subscribe_callback()
     {
-      return boost::bind(&CountSubListener::peer_subscribe, this);
+      return std::bind(&CountSubListener::peer_subscribe, this, std::placeholders::_1);
     }
 
-    void peer_unsubscribe(::ros::SingleSubscriberPublisher & sub)
+    void peer_unsubscribe(const ::ros::SingleSubscriberPublisher & sub)
     {
       throw std::runtime_error(to_string("No unsubscription allowed for topic ",sub.getTopic(),
 					 " requested by ",sub.getSubscriberName(),"\n"));
-	}
+    }
 
     ::ros::SubscriberStatusCallback peer_unsubscribe_callback()
     {
-      return boost::bind(&CountSubListener::peer_unsubscribe, this);
+      return std::bind(&CountSubListener::peer_unsubscribe, this, std::placeholders::_1);
     }
 
     void wait()
@@ -60,15 +66,16 @@ namespace dsaam { namespace ros
   struct ROSMessagePointerHolder;
   using message_type = ROSMessagePointerHolder;
   using message_cptr = boost::shared_ptr<const message_type>;
-  using void_cptr = boost::shared_ptr<const void>;
   using time_type = ::ros::Time;
   template<class F>
   using function_type = boost::function<F>;
-  
+
+  using void_cptr = boost::shared_ptr<const void>;
+
   template<class M>
   const time_type& message_timestamp(const void_cptr& m)
   {
-    return *::ros::message_traits::TimeStamp<M>(*static_cast<const M*>(m.get()));
+    return *::ros::message_traits::TimeStamp<M>::pointer(*static_cast<const M*>(m.get()));
   }
 
   
@@ -78,15 +85,26 @@ namespace dsaam { namespace ros
       : m(m), timestamp_fun(&message_timestamp<M>)
     {}
 
+    template<class M> ROSMessagePointerHolder(M *m)
+    : m(m), timestamp_fun(&message_timestamp<M>)
+    {
+    }
+
     const ::ros::Time & time() const
     {
       return timestamp_fun(m);
     }
 
-    template<class P>
-    P get()
+    template<class P> 
+    boost::shared_ptr<const P> get_shared() const
     {
       return boost::static_pointer_cast<P>(m);
+    }
+
+    template<class P> 
+    const P& get_ref() const
+    {
+      return *(static_cast<const P*>(m.get()));
     }
 
   private:
@@ -112,24 +130,26 @@ namespace dsaam { namespace ros
   
   struct ros_header_stamp
   {
-    using message_type = void;
+    using message_type = ::dsaam::ros::message_type;
+    using message_cptr= ::dsaam::ros::message_cptr;
+    using time_type = ::dsaam::ros::time_type;
+
     using time_message_type=std_msgs::Header;
-    using time_message_cptr=boost::shared_ptr<time_message_type>;
-    using mpointer=boost::shared_ptr<const ROSMessagePointerHolder>;
+    using time_message_cptr=boost::shared_ptr<const time_message_type>;
     
-    static const ::ros::Time& time(const mpointer &m)
+    static const time_type& time(const message_cptr &m)
     {
       return m->time();
     }
 
-    static std_msgs::Header time_message(const ::ros::Time &t)
+    static std_msgs::Header time_message(const time_type &t)
     {
       std_msgs::Header h;
       h.stamp = t;
       return h;
     }
 
-    static const ::ros::Time & time_message(const boost::shared_ptr<const time_message_type> &m)
+    static const time_type& time_message(const boost::shared_ptr<const time_message_type> &m)
     {
       return m->stamp;
     }
@@ -140,24 +160,24 @@ namespace dsaam { namespace ros
   public:
 
     //required by Node
-    using message_type = ::dsaam::ros::message_type;
-    using message_cptr = ::dsaam::ros::message_cptr;
-    using time_type = time_type;
+    using ros_header_stamp::message_type;
+    using ros_header_stamp::message_cptr;
+    using ros_header_stamp::time_type;
     template<class F>
-    using function_type = boost::function<F>;
-    
-    using ros_header_stamp = ros_header_stamp;
-    using ros_header_stamp::time_message_type;
+    using function_type = dsaam::ros::function_type<F>;    
     using send_callback_type = ::dsaam::send_callback_type<message_cptr, function_type>;
     using time_callback_type = ::dsaam::time_callback_type<time_type, function_type>;
     using InFlow = ::dsaam::InFlow<message_cptr, time_type, function_type>;
+    using Sink = ::dsaam::Sink;
     using OutFlow = ::dsaam::OutMessageFlow<message_cptr, time_type, function_type, ros_header_stamp>;
-    
+
+    using ros_header_stamp::time_message_type;
+
     RosTransport()
     { 
     }
 
-    void ros_init()
+    void init_ros()
     {
       for(auto & l : sub_listeners)
 	{
@@ -165,11 +185,11 @@ namespace dsaam { namespace ros
 	}
     }
 
-    template<class S,
-	     class = typename std::enable_if<::ros::message_traits::HasHeader<S>::value>::type>
-    void setup_subscriber(const string & ifname, const string & name,
-			  const time_type& time, const time_type& dt, size_t max_qsize,
-			  const dsaam::message_callback_type<S, time_type, function_type> &m_cb)
+    template<class S>
+    typename std::enable_if<::ros::message_traits::HasHeader<S>::value>::type
+    setup_subscriber(const string & ifname, const string & name,
+		     const time_type& time, const time_type& dt, size_t max_qsize,
+		     const dsaam::message_callback_type<S, time_type, function_type> &m_cb)
     {
       //Setup ROS subscriber
       auto cb = this->push_callback(ifname);
@@ -183,12 +203,12 @@ namespace dsaam { namespace ros
       setup_inflow(flow);
     }
 
-    template<class S,
-	     class  = typename std::enable_if<::ros::message_traits::HasHeader<S>::value>::type>
-    void setup_publisher(const string &ofname,
-			 const time_type &time, const time_type& dt,
-			 std::vector<string> subscribers,
-			 size_t max_qsize = 0)
+    template<class S>
+    typename std::enable_if<::ros::message_traits::HasHeader<S>::value>::type
+    setup_publisher(const string &ofname,
+		    const time_type &time, const time_type& dt,
+		    std::vector<string> subscribers,
+		    size_t max_qsize = 0)
     {
       auto name = ::ros::this_node::getName();
       auto subcount = std::unique_ptr<CountSubListener>(new CountSubListener(subscribers.size()));
@@ -211,10 +231,11 @@ namespace dsaam { namespace ros
       for(size_t i = 0; i < flow.sinks.size(); i++)
 	{
 	  auto &s = flow.sinks[i];
-	  auto cb = std::bind<void(const time_type&)>(&RosTransport::_ros_receive_time, this,
-						      std::bind(&OutFlow::time_callback, &flow, i ,_1),
-						      _1);
-	  subs.push_back(n.subscribe<time_type>(name + "/time/" + s.name, flow.qsize, cb));
+	  auto cb1 =  std::bind(&OutFlow::time_callback, &flow, i , std::placeholders::_1);
+	  //std::function<void(const time_message_cptr&)> cb =		
+	  //  std::bind(&RosTransport::_ros_receive_time, this, cb1, std::placeholders::_1);
+	  auto cb = _ros_receive_time(cb1);
+	  subs.push_back(n.subscribe<time_message_type>(name + "/time/" + s.name, flow.qsize, cb));
 	}
     }
 
@@ -235,13 +256,19 @@ namespace dsaam { namespace ros
       sub_listeners.push_back(std::move(subcount));
       auto &pub = pubs.back();
       using std::placeholders::_1;
-      return std::bind<void(const time_type&)>(&RosTransport::_ros_publish_time, this, pub, _1);
+      return std::bind(&RosTransport::_ros_publish_time, this, pub, _1);
     }
 
-    void _ros_receive_time(const time_callback_type& cb, const time_message_cptr &time)
+    struct _ros_receive_time
     {
-      cb(time_message(time));
-    }
+      _ros_receive_time(const time_callback_type& cb)
+	:cb(cb) {}
+      void operator ()(const time_message_cptr &time)
+      {
+	cb(time_message(time));
+      }
+      const time_callback_type cb;
+    };
     
     void _ros_publish_time(::ros::Publisher & pub, const time_type &time)
     {

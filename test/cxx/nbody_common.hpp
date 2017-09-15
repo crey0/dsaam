@@ -132,8 +132,8 @@ public:
   using typename node_type::send_callback_type;
   using typename node_type::message_callback_type;
 
-  OneBSystemNodeBase(std::vector<Body> & bodies,
-		     string &name, const time_type &time, const time_type &dt, size_t max_qsize,
+  OneBSystemNodeBase(const std::vector<Body> & bodies, const string &name,
+		     const time_type &time, const time_type &dt, size_t max_qsize,
 		     const time_type &stop_time)
     : dsaam::OneThreadNode<TTransport>(name,time,dt,max_qsize),
     system(name, bodies), stop_time(stop_time)

@@ -24,8 +24,8 @@ def rosbridge(node):
         s = QuaternionStamped()
         s.quaternion.x = state[0][0]
         s.quaternion.y = state[0][1]
-        s.quaternion.x = state[1][0]
-        s.quaternion.x = state[1][1]
+        s.quaternion.z = state[1][0]
+        s.quaternion.w = state[1][1]
         send(name, s, time)
         
     node.process = _process

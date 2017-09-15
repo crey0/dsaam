@@ -37,6 +37,12 @@ namespace dsaam
 	}
     }
 
+    OutMessageFlow(OutMessageFlow &&other)
+    {
+      this->heap = std::move(other.heap);
+      this->heap_handles = std::move(heap_handles);
+    }
+
     void time_callback(unsigned int subscriber, const T &)
     {
       unsigned int top;
@@ -69,8 +75,11 @@ namespace dsaam
       
       this->time  = this->time + this->dt;
     }
-  private:
-    void setup_sink(Sink&) = delete;
+    
+    void setup_sink(Sink&)
+    {
+      throw std::runtime_error("Method not implemented");
+    }
     
   private:
     heap_type heap;
