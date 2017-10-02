@@ -157,7 +157,7 @@ public:
     send_v = this->send_callback(this->name + "/speed");
 
     //send init position and speed
-    send_state(this->time());
+    this->send_state(this->time());
   }
 
   void step(const time_type & to)
@@ -165,7 +165,7 @@ public:
     //std::cout << to_string("[",time(),"] [",name,"] Stepping to ",to) << std::endl;
     system.integrate(to - this->time());
     //send updated position and speed
-    send_state(to);
+    this->send_state(to);
     if(to + this->dt > stop_time) this->stop();
 
   }

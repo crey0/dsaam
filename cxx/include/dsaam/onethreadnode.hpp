@@ -112,6 +112,12 @@ namespace dsaam
     OneThreadNode(const string &name, const time_type &time, const time_type &dt, size_t max_qsize)
       : Node<T>(name,time,max_qsize), dt(dt), stopped(false),
 	_thread() {} 
+
+    ~OneThreadNode()
+    {
+      //Prevents destruction of joinable thread which is illegal
+      stop();
+    }
     
     void start()
     {
@@ -121,11 +127,7 @@ namespace dsaam
     void stop()
     {
       stopped = true;
-    }
-
-    void join()
-    {
-      _thread.join();
+      if(_thread.joinable()) join();
     }
 
     virtual void init() = 0;
@@ -133,6 +135,7 @@ namespace dsaam
     virtual void step(const time_type &) = 0;
 
   private:
+    
     void run()
     {
       init();
@@ -146,6 +149,11 @@ namespace dsaam
 	    step(t); this->stepTime(t); t = t + dt; }
 	}
       std::cout << to_string("[",this->time(),"] [",this->name,"] STOP \n");
+    }
+
+    void join()
+    {
+      _thread.join();
     }
     
   public:

@@ -41,7 +41,7 @@ class OneBSystemNode : public OneBSystemNodeBase<TTransport>
 public:
   using TTransport::time_type;
   OneBSystemNode(const std::vector<Body> & bodies, const string &name,
-		 const time_type &time, const time_type &dt, unsigned int max_qsize,
+		 const time_type &time, const time_type &dt, size_t max_qsize,
 		 const time_type &stop_time)
     : OneBSystemNodeBase<TTransport>(bodies, name, time, dt, max_qsize, stop_time)
   {
@@ -64,7 +64,7 @@ public:
   }
 
 protected:
-  void send_state(const time_type & t) override
+  virtual void send_state(const time_type & t) override
   {
     mpointer m {new dsaam::ros::ROSMessagePointerHolder{new vm_type()}};
     pm_type &p = const_cast<pm_type&>(m->get_ref<pm_type>());
@@ -105,10 +105,10 @@ time_type from_string(const string &nanos_s)
 int main(int argc, char **argv)  
 {
   ros::init(argc, argv, "not_good");
-
   std::vector<Body> bodies;
 
-  string name = ros::this_node::getName();
+  string name;
+  assert(ros::param::get("name", name));
   std::cout << "This node has name " << name << std::endl; 
 
   int param_int;
@@ -161,7 +161,7 @@ int main(int argc, char **argv)
       add_body(b_name, bodyp);
      
     }
-  auto node = OneBSystemNode(bodies, name, t, dt, max_qsize, stop_time);
+  OneBSystemNode node{bodies, name, t, dt, max_qsize, stop_time};
 
   auto get_body = [&bodies](const string &n) -> const string&
     {
@@ -181,12 +181,12 @@ int main(int argc, char **argv)
       string type = pt["message_class"];
       if(type == "geometry_msgs.msg.PointStamped")
 	{
-	  node.setup_subscriber<geometry_msgs::PointStamped>(i_name, t, i_dt,
+	  node.setup_subscriber<geometry_msgs::PointStamped>(i_name, name, t, i_dt,
 				node.pCallback(in_body_name));
 	}
       else if(type == "geometry_msgs.msg.QuaternionStamped")
 	{
-	  node.setup_subscriber<geometry_msgs::QuaternionStamped>(i_name, t, i_dt,
+	  node.setup_subscriber<geometry_msgs::QuaternionStamped>(i_name, name, t, i_dt,
 				node.vCallback(in_body_name));
 	} 
       else
@@ -227,6 +227,9 @@ int main(int argc, char **argv)
 
   //finish init ROS transport, wait for incoming subscriptions
   node.init_ros();
+
+  //start node
+  node.start();
 
   return 0;
 }

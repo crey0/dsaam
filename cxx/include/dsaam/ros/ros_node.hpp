@@ -194,13 +194,12 @@ namespace dsaam { namespace ros
 
     template<class S>
     typename std::enable_if<::ros::message_traits::HasHeader<S>::value>::type
-    setup_subscriber(const string & ifname,
+    setup_subscriber(const string & ifname, const string & name,
 		     const time_type& time, const time_type& dt, 
 		     const dsaam::message_callback_type<shared_cptr_t<S>,
 		     time_type, function_type> &m_cb,
 		     size_t max_qsize = 0)
     {
-      auto name = ::ros::this_node::getName();
 
       //Setup callback for delivering messages
       auto message_cwrapper = std::bind(&_dispatch_callback<S>, m_cb,
@@ -224,8 +223,7 @@ namespace dsaam { namespace ros
 		    const time_type &time, const time_type& dt,
 		    std::vector<string> subscribers,
 		    size_t max_qsize = 0)
-    {
-      auto name = ::ros::this_node::getName();
+    {      
       auto subcount = std::unique_ptr<CountSubListener>(new CountSubListener(subscribers.size()));
       pubs.push_back(n.advertise<S>(ofname, max_qsize,
 				    subcount->peer_subscribe_callback()));
@@ -234,7 +232,7 @@ namespace dsaam { namespace ros
       //create ouflow and setup sinks
       send_callback_type cb = std::bind(&ROSMessagePointerHolder::publish<S>,
 					std::ref(pubs.back()), std::placeholders::_1);
-      OutFlow flow {name, time, dt, sinks, max_qsize, cb};
+      OutFlow flow {ofname, time, dt, sinks, max_qsize, cb};
       setup_outflow(std::move(flow));
     }
 

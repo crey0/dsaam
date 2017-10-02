@@ -136,6 +136,10 @@ def create_launch_file(path, autotest=True):
         'yellow': ['yellow_{}'.format(i) for i in range(n['yellow'])],
         'drawer': ['drawer_{}'.format(i) for i in range(n['drawer'])],
         }
+
+    m_types = [("position", "geometry_msgs.msg.PointStamped"),
+               ("speed",    "geometry_msgs.msg.QuaternionStamped")]
+    
     # END PARAMS
 
     runfile = "dsaam_nbody_node"
@@ -159,20 +163,19 @@ def create_launch_file(path, autotest=True):
             }
             outflows = [{
                 'from': i,
-                'name': i,
-                'message_class': "geometry_msgs.msg.QuaternionStamped",
+                'name': i + "/" + mt[0],
+                'message_class': mt[1],
                 'dt': dt[c].to_nanos(),
-                'sinks': [j for color in idx for j in idx[color] if c in effectors[color]
-                          and not j == i],
-            }]
+                'sinks': [j for color in idx for j in idx[color]
+                          if c in effectors[color] and not j == i],
+            } for mt in m_types ]
             inflows = [{
                 'from': j,
-                'name': j,
-                'message_class': "geometry_msgs.msg.QuaternionStamped",
+                'name': j + "/" + mt[0],
+                'message_class': mt[1],
                 'dt': dt[color].to_nanos(),
-                } for color in effectors[c] for j in idx[color]
-                       if not j == i
-            ]
+                } for color in effectors[c] for j in idx[color] for mt in m_types
+                       if not j == i ]
             node_params= {
                 'name': i,
                 'max_qsize': max_qsize,
