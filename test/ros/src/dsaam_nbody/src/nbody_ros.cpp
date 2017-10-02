@@ -86,34 +86,57 @@ private:
 
 using time_type = OneBSystemNode::time_type;
 
-time_type from_string(const string &nanos_s)
+time_type from_nanos(const unsigned long &nanos)
 {
-  unsigned long nanos = std::stoul(nanos_s);
   return time_type((int)(nanos / dsaam::Time::NS_IN_SECOND),
 		   (int)(nanos % dsaam::Time::NS_IN_SECOND));
 }
+time_type from_secs(const int &secs)
+{
+  return time_type((int)secs,
+		   (int)0);
+}
+time_type from_string(const string &nanos_s)
+{
+  unsigned long nanos = std::stoul(nanos_s);
+  return from_nanos(nanos);
+}
 
-int main()
-{    
+int main(int argc, char **argv)  
+{
+  ros::init(argc, argv, "not_good");
+
   std::vector<Body> bodies;
 
   string name = ros::this_node::getName();
+  std::cout << "This node has name " << name << std::endl; 
 
-  string param;
-  assert(ros::param::get("start_time", param));
-  time_type t = from_string(param);
-  assert(ros::param::get("dt", param));
-  time_type dt = from_string(param);
-  assert(ros::param::get("stop_time", param));
-  time_type stop_time = from_string(param);
-
-  assert(ros::param::get("max_qsize",param));
-  size_t max_qsize = std::stoul(param);
-
+  int param_int;
+  assert(ros::param::get("start_time", param_int));
+  time_type t = from_nanos(param_int);
+  assert(ros::param::get("dt", param_int));
+  time_type dt = from_nanos(param_int);
+  assert(ros::param::get("/stop_time", param_int));
+  time_type stop_time = from_secs(param_int);
+  assert(ros::param::get("max_qsize",param_int));
+  size_t max_qsize = param_int;
+  assert(max_qsize > 0 );
+  
   XmlRpc::XmlRpcValue ptree;
 
-  auto add_body =  [&bodies](const string& b_name, XmlRpc::XmlRpcValue &bodyp) -> void
+  auto has_body = [&bodies](const string &b_name)
     {
+      for(auto &b : bodies)
+	{
+	  if (b.name == b_name) return true;
+	}
+      return false;
+    };
+  
+  auto add_body =  [&bodies,&has_body](const string& b_name, XmlRpc::XmlRpcValue &bodyp) -> void
+    {
+      if (has_body(b_name)) return;
+      
       Array2d p_0,v_0;
       p_0[0] = double(bodyp["position"][0]);
       p_0[1] = double(bodyp["position"][1]);
@@ -129,10 +152,10 @@ int main()
   add_body(name, ptree);
 	   
   assert(ros::param::get("inflows", ptree));
-  for(auto &_pt : ptree)
+  for(int i=0; i < ptree.size(); i++)
     {
-      auto pt = _pt.second;
-      string b_name = pt["from"];
+      auto pt = ptree[i];
+      string b_name = string(pt["from"]);
       XmlRpc::XmlRpcValue bodyp;
       assert(ros::param::get("/"+b_name+"/body", bodyp));
       add_body(b_name, bodyp);
@@ -148,11 +171,11 @@ int main()
     };
   
   //init subs
-  for(auto &_pt : ptree)
+  for(int i=0; i < ptree.size(); i++)
     {
-      auto pt = _pt.second;
+      auto pt = ptree[i];
       string i_name = pt["name"];
-      time_type i_dt = from_string(pt["dt"]);
+      time_type i_dt = from_nanos(int(pt["dt"]));
       const string &in_body_name = get_body(i_name);
       
       string type = pt["message_class"];
@@ -174,15 +197,16 @@ int main()
   
   //init pubs
   assert(ros::param::get("outflows", ptree));
-  for(auto &_pt : ptree)
+  for(int i=0; i < ptree.size(); i++)
     {
-      auto pt = _pt.second;
+      auto pt = ptree[i];
       string o_name = pt["name"];
-      time_type o_dt = from_string(pt["dt"]);
+      time_type o_dt = from_nanos(int(pt["dt"]));
       std::vector<string> sinks;
-      for(auto &s : pt["sinks"])
+      auto pt_sinks = pt["sinks"];
+      for(int s=0; s < pt_sinks.size(); s++)
 	{
-	  sinks.push_back(string(s.second));
+	  sinks.push_back(string(pt_sinks[s]));
 	}
       string type = pt["message_class"];
       if(type == "geometry_msgs.msg.PointStamped")

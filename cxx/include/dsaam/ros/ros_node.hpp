@@ -201,11 +201,6 @@ namespace dsaam { namespace ros
 		     size_t max_qsize = 0)
     {
       auto name = ::ros::this_node::getName();
-      send_callback_type cb_push = this->push_callback(ifname);
-      //Setup ROS subscriber
-      boost::function<void(const boost::shared_ptr<const S>)> cb = \
-	std::bind(&RosTransport::_ros_callback<S>, cb_push, std::placeholders::_1);
-      subs.push_back(n.subscribe<S>(ifname, max_qsize, cb));
 
       //Setup callback for delivering messages
       auto message_cwrapper = std::bind(&_dispatch_callback<S>, m_cb,
@@ -214,6 +209,13 @@ namespace dsaam { namespace ros
       //create inflow
       auto flow = InFlow(ifname, time, dt, max_qsize, message_cwrapper, time_callback);
       setup_inflow(std::move(flow));
+
+      //After InFlow has been setup on node, create get push cb and create ros subscriber
+      send_callback_type cb_push = this->push_callback(ifname);
+      boost::function<void(const boost::shared_ptr<const S>)> cb = \
+	std::bind(&RosTransport::_ros_callback<S>, cb_push, std::placeholders::_1);
+      subs.push_back(n.subscribe<S>(ifname, max_qsize, cb));
+      
     }
 
     template<class S>

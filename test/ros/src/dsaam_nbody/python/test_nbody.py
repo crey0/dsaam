@@ -74,7 +74,7 @@ class LaunchFileCreator:
         with open(path, 'w') as f:
             f.write(string)
         
-def create_launch_file(path, autotest=False):
+def create_launch_file(path, autotest=True):
     # BEGIN PARAMS
     G = 1.5 * 1.80 * 1e-11
     C = 8 * 1e-3
@@ -116,6 +116,7 @@ def create_launch_file(path, autotest=False):
     }
      
     start_time = Time(0)
+    stop_time = Time(1000)
     max_qsize = 10
 
     draw_size = (10, 10)
@@ -137,11 +138,13 @@ def create_launch_file(path, autotest=False):
         }
     # END PARAMS
 
-    runfile = "run_ros_node.sh"
+    runfile = "dsaam_nbody_node"
+    runfile_py = "run_ros_node.sh"
     conf_path = path + "/../launch/"
     launch = LaunchFileCreator()
     global_params = { 
         'autotest':autotest,
+        'stop_time':stop_time.sec
     }
     create_yaml(conf_path + "globals.yaml", global_params)
     launch.rosparam(conf_path + "globals.yaml")
@@ -155,6 +158,7 @@ def create_launch_file(path, autotest=False):
                 'color': c
             }
             outflows = [{
+                'from': i,
                 'name': i,
                 'message_class': "geometry_msgs.msg.QuaternionStamped",
                 'dt': dt[c].to_nanos(),
@@ -162,6 +166,7 @@ def create_launch_file(path, autotest=False):
                           and not j == i],
             }]
             inflows = [{
+                'from': j,
                 'name': j,
                 'message_class': "geometry_msgs.msg.QuaternionStamped",
                 'dt': dt[color].to_nanos(),
@@ -202,7 +207,7 @@ def create_launch_file(path, autotest=False):
     }
     yamlp = conf_path + "{}.yaml".format(i)
     create_yaml(yamlp, node_params)
-    launch.node(i, i, runfile, yamlp, "dsaam_nbody")
+    launch.node(i, i, runfile_py, yamlp, "dsaam_nbody")
     launch.write(conf_path + "test_nbody.launch")
 
     # Set ros package path to add the dsaam python root folder 
@@ -229,4 +234,4 @@ def test_ros_nbody(autotest=True):
         assert code == 0, "One of the processes died with non-zero exit code {}".format(code)
 
 if __name__ == "__main__":
-    test_ros_nbody()
+    test_ros_nbody(autotest=False)
