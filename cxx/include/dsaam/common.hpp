@@ -63,8 +63,11 @@ namespace dsaam
   struct OutFlow
   {
     OutFlow() = default;
-    OutFlow(string name, const T& time, const T& dt, const std::vector<S>& sinks = {}, size_t qsize = 0)
-      : name(name), time(time), dt(dt), qsize(qsize), send(), sinks(sinks) {}
+    OutFlow(string name, const T& time, const T& dt,
+	    const std::vector<S>& sinks = {}, size_t qsize = 0,
+	    const send_callback_type<M,F> &send =
+	    empty<send_callback_type<M,F>>::value())
+      : name(name), time(time), dt(dt), qsize(qsize), send(send), sinks(sinks){}
 
     void setup_sink(S &&sink)
     {

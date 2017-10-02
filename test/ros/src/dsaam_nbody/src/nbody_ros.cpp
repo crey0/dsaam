@@ -159,12 +159,12 @@ int main()
       if(type == "geometry_msgs.msg.PointStamped")
 	{
 	  node.setup_subscriber<geometry_msgs::PointStamped>(i_name, t, i_dt,
-								  node.pCallback(in_body_name));
+				node.pCallback(in_body_name));
 	}
       else if(type == "geometry_msgs.msg.QuaternionStamped")
 	{
 	  node.setup_subscriber<geometry_msgs::QuaternionStamped>(i_name, t, i_dt,
-								  node.vCallback(in_body_name));
+				node.vCallback(in_body_name));
 	} 
       else
 	{

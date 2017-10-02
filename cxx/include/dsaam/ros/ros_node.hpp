@@ -79,7 +79,7 @@ namespace dsaam { namespace ros
       : m(m), timestamp_fun(&message_timestamp<M>)
     {}
 
-    template<class M> ROSMessagePointerHolder(boost::shared_ptr<const M> & m)
+    template<class M> ROSMessagePointerHolder(const boost::shared_ptr<const M> & m)
       : m(m), timestamp_fun(&message_timestamp<M>)
     {}
 
@@ -96,13 +96,20 @@ namespace dsaam { namespace ros
     template<class P> 
     boost::shared_ptr<const P> get_shared() const
     {
-      return boost::static_pointer_cast<P>(m);
+      return boost::static_pointer_cast<const P>(m);
     }
 
     template<class P> 
     const P& get_ref() const
     {
       return *(static_cast<const P*>(m.get()));
+    }
+
+    template<class P>
+    static void publish(::ros::Publisher &pub,
+				 boost::shared_ptr<const ROSMessagePointerHolder> m)
+    {
+      pub.publish(m->get_ref<P>());
     }
 
   private:
@@ -162,7 +169,9 @@ namespace dsaam { namespace ros
     using ros_header_stamp::message_cptr;
     using ros_header_stamp::time_type;
     template<class F>
-    using function_type = dsaam::ros::function_type<F>;    
+    using function_type = dsaam::ros::function_type<F>;
+    template<class M>
+    using shared_cptr_t = boost::shared_ptr<const M>;
     using send_callback_type = ::dsaam::send_callback_type<message_cptr, function_type>;
     using time_callback_type = ::dsaam::time_callback_type<time_type, function_type>;
     using InFlow = ::dsaam::InFlow<message_cptr, time_type, function_type>;
@@ -187,16 +196,20 @@ namespace dsaam { namespace ros
     typename std::enable_if<::ros::message_traits::HasHeader<S>::value>::type
     setup_subscriber(const string & ifname,
 		     const time_type& time, const time_type& dt, 
-		     const dsaam::message_callback_type<S, time_type, function_type> &m_cb,
+		     const dsaam::message_callback_type<shared_cptr_t<S>,
+		     time_type, function_type> &m_cb,
 		     size_t max_qsize = 0)
     {
       auto name = ::ros::this_node::getName();
+      send_callback_type cb_push = this->push_callback(ifname);
       //Setup ROS subscriber
-      auto cb = this->push_callback(ifname);
+      boost::function<void(const boost::shared_ptr<const S>)> cb = \
+	std::bind(&RosTransport::_ros_callback<S>, cb_push, std::placeholders::_1);
       subs.push_back(n.subscribe<S>(ifname, max_qsize, cb));
 
       //Setup callback for delivering messages
-      auto message_cwrapper = message_conversion_callback<S, time_type>(m_cb);
+      auto message_cwrapper = std::bind(&_dispatch_callback<S>, m_cb,
+					std::placeholders::_1, std::placeholders::_2);
       auto time_callback = _ros_out_time_callback(ifname, name, max_qsize);
       //create inflow
       auto flow = InFlow(ifname, time, dt, max_qsize, message_cwrapper, time_callback);
@@ -217,7 +230,9 @@ namespace dsaam { namespace ros
       sub_listeners.push_back(std::move(subcount));
       std::vector<Sink> sinks = {begin(subscribers), end(subscribers)};
       //create ouflow and setup sinks
-      OutFlow flow {name, time, dt, sinks, max_qsize };
+      send_callback_type cb = std::bind(&ROSMessagePointerHolder::publish<S>,
+					std::ref(pubs.back()), std::placeholders::_1);
+      OutFlow flow {name, time, dt, sinks, max_qsize, cb};
       setup_outflow(std::move(flow));
     }
 
@@ -259,7 +274,7 @@ namespace dsaam { namespace ros
       sub_listeners.push_back(std::move(subcount));
       auto &pub = pubs.back();
       using std::placeholders::_1;
-      return std::bind(&RosTransport::_ros_publish_time, this, pub, _1);
+      return std::bind(&RosTransport::_ros_publish_time, pub, _1);
     }
 
     struct _ros_receive_time
@@ -273,10 +288,28 @@ namespace dsaam { namespace ros
       const time_callback_type cb;
     };
     
-    void _ros_publish_time(::ros::Publisher & pub, const time_type &time)
+    static void _ros_publish_time(::ros::Publisher & pub, const time_type &time)
     {
       auto m = time_message(time);
       pub.publish(m);
+    }
+
+    template<class S>
+    static void _ros_callback(send_callback_type &cb,
+			      const shared_cptr_t<S> & m)
+    {
+      auto mp = boost::shared_ptr<const ROSMessagePointerHolder>
+	{new ROSMessagePointerHolder{m}};
+      cb(mp);
+    }
+
+    template<class S>
+    static void _dispatch_callback( dsaam::message_callback_type<shared_cptr_t<S>,
+				    time_type, function_type> &cb, const message_cptr & mw,
+				    const time_type & nt)
+    {
+      shared_cptr_t<S> m = mw->get_shared<S>();
+      cb(m, nt);
     }
 
     virtual send_callback_type push_callback(size_t flow) = 0;
