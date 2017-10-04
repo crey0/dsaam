@@ -142,8 +142,8 @@ int main(int argc, char **argv)
       Array2d p_0,v_0;
       p_0[0] = double(bodyp["position"][0]);
       p_0[1] = double(bodyp["position"][1]);
-      p_0[0] = double(bodyp["speed"][0]);
-      p_0[1] = double(bodyp["speed"][1]);
+      v_0[0] = double(bodyp["speed"][0]);
+      v_0[1] = double(bodyp["speed"][1]);
 
       bodies.emplace_back(b_name, p_0, v_0,
 			  double(bodyp["mass"]), double(bodyp["radius"]),
@@ -151,7 +151,7 @@ int main(int argc, char **argv)
     };
   
   assert(ros::param::get("body", ptree));
-  add_body(name, ptree);
+  add_body("/"+name, ptree);
 	   
   assert(ros::param::get("inflows", ptree));
   for(int i=0; i < ptree.size(); i++)
@@ -163,7 +163,7 @@ int main(int argc, char **argv)
       add_body(b_name, bodyp);
      
     }
-  OneBSystemNode node{bodies, "/" + name, t, dt, max_qsize, stop_time};
+  OneBSystemNode node{bodies, "/"+name, t, dt, max_qsize, stop_time};
 
   auto get_body = [&bodies](const string &n) -> const string&
     {
