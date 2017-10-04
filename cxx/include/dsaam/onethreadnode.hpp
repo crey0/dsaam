@@ -117,17 +117,22 @@ namespace dsaam
     {
       //Prevents destruction of joinable thread which is illegal
       stop();
+      if(_thread.joinable()) join();
     }
     
     void start()
     {
       if(!_thread.joinable()) _thread = std::thread(&OneThreadNode::run, this);
     }
+
+    void join()
+    {
+      _thread.join();
+    }
   
     void stop()
     {
       stopped = true;
-      if(_thread.joinable()) join();
     }
 
     virtual void init() = 0;
@@ -151,10 +156,7 @@ namespace dsaam
       std::cout << to_string("[",this->time(),"] [",this->name,"] STOP \n");
     }
 
-    void join()
-    {
-      _thread.join();
-    }
+
     
   public:
     const time_type dt;
