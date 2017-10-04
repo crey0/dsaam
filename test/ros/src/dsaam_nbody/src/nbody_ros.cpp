@@ -78,8 +78,8 @@ protected:
     m = mpointer(new dsaam::ros::ROSMessagePointerHolder{new vm_type()});
     vm_type &v = const_cast<vm_type&>(m->get_ref<vm_type>());
     v.header.stamp = t;
-    v.quaternion.z = system.self().p[0];
-    v.quaternion.w = system.self().p[1];
+    v.quaternion.z = system.self().v[0];
+    v.quaternion.w = system.self().v[1];
     send_v(std::move(m));
   }
 private:
