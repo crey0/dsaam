@@ -72,8 +72,10 @@ class System:
     def updateState(self, idx, s):
         p, v = s
         b = self.bodies[idx]
-        b.p = p
-        b.v = v
+        if p is not None:
+            b.p = p
+        if v is not None:
+            b.v = v
         
 class SystemOne(System):
     def __init__(self, theone, bodies):

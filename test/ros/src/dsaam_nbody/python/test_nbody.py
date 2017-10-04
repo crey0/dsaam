@@ -194,10 +194,11 @@ def create_launch_file(path, autotest=True):
     i = 'drawer_0'
     outflows = []
     inflows = [{
-        'name': j,
-        'message_class': "geometry_msgs.msg.QuaternionStamped",
+        'from': j,
+        'name': j + "/" + mt[0],
+        'message_class': mt[1],
         'dt': dt[color].to_nanos(),
-    } for color in effectors[c] for j in idx[color]]
+    } for color in effectors[c] for j in idx[color] for mt in m_types] 
     node_params= {
         'name': i,
         'max_qsize': max_qsize,

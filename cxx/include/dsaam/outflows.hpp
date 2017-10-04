@@ -2,7 +2,7 @@
 #define DSAAM_OUTFLOWS_HPP
 #include<dsaam/common.hpp>
 #include<dsaam/binary_heap.hpp>
-
+#include<iostream>
 namespace dsaam
 {
   template<class M, class T, template <class> class F, class FMT>
@@ -40,7 +40,7 @@ namespace dsaam
     OutMessageFlow(OutMessageFlow &&other) : OutFlow<M,T,F>(other)
     {
       this->heap = std::move(other.heap);
-      this->heap_handles = std::move(heap_handles);
+      this->heap_handles = std::move(other.heap_handles);
     }
 
     void time_callback(unsigned int subscriber, const T &)
@@ -72,8 +72,8 @@ namespace dsaam
       cv.notify_one();
 
       OutFlow<M,T,F>::send(message);
-      
-      this->time  = this->time + this->dt;
+      std::cout << "Sent message on flow " << this->name << " time " << this->time << std::endl;
+      //this->time  = this->time + this->dt;
     }
     
     void setup_sink(Sink&&)

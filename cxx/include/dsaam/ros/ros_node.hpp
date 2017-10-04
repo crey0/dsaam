@@ -7,7 +7,7 @@ namespace ros
 {
   Time operator+(const Time& t1, const Time& t2)
   {
-    return t1 + ros::Duration(t2.toNSec());
+    return t1 + ros::Duration(t2.sec, t2.nsec);
   }
 }
 #include<ros/message_traits.h>
@@ -16,20 +16,34 @@ namespace ros
 
 namespace dsaam { namespace ros
 {
+  void peer_subscribe_dummy(const ::ros::SingleSubscriberPublisher & sub)
+  {
+    std::cout << "DUMMY PEER SUBSCRIBE || " << "Peer " << sub.getSubscriberName()
+	      << " subscribed to " <<  sub.getTopic() << std::endl;
+  }
+  
+  
   
   class CountSubListener
   {
   public:
-    CountSubListener(size_t num_peers) : num_peers(num_peers), sub_sem(0) {}
-
-    void peer_subscribe(const ::ros::SingleSubscriberPublisher &)
+    CountSubListener(size_t num_peers) : num_peers(num_peers), sub_sem(0)
     {
-      sub_sem.decrease();
+      //TODO change this ?
+      _peer_sub_cb =  boost::bind(&CountSubListener::peer_subscribe, this, _1);
+      _peer_unsub_cb = boost::bind(&CountSubListener::peer_unsubscribe, this, _1);
+    }
+
+    void peer_subscribe(const ::ros::SingleSubscriberPublisher & sub)
+    {
+      std::cout << "GOOD || Peer " << sub.getSubscriberName() << " subscribed to " <<  sub.getTopic() <<
+	"(n=" << num_peers << ")" << std::endl;
+      sub_sem.increase();
     }
 
     ::ros::SubscriberStatusCallback peer_subscribe_callback()
     {
-      return std::bind(&CountSubListener::peer_subscribe, this, std::placeholders::_1);
+      return _peer_sub_cb;
     }
 
     void peer_unsubscribe(const ::ros::SingleSubscriberPublisher & sub)
@@ -40,18 +54,23 @@ namespace dsaam { namespace ros
 
     ::ros::SubscriberStatusCallback peer_unsubscribe_callback()
     {
-      return std::bind(&CountSubListener::peer_unsubscribe, this, std::placeholders::_1);
+      return  _peer_unsub_cb;
     }
 
     void wait()
     {
+      
+      std::cout << "Waiting on " << num_peers << " peers " << std::endl;
       for(size_t i=0; i< num_peers; i++)
 	{
-	  sub_sem.increase();
+	  sub_sem.decrease();
 	}
+      std::cout << "Waiting DONE" << std::endl;
     }
     
   private:
+    ::ros::SubscriberStatusCallback _peer_sub_cb;
+    ::ros::SubscriberStatusCallback _peer_unsub_cb;
     size_t num_peers;
     Semaphore sub_sem;
     
@@ -180,12 +199,13 @@ namespace dsaam { namespace ros
 
     using ros_header_stamp::time_message_type;
 
-    RosTransport()
+    RosTransport() : n(), async_spinner(1)
     { 
     }
 
     void init_ros()
     {
+      async_spinner.start();
       for(auto & l : sub_listeners)
 	{
 	  l->wait();
@@ -225,8 +245,10 @@ namespace dsaam { namespace ros
 		    size_t max_qsize = 0)
     {      
       auto subcount = std::unique_ptr<CountSubListener>(new CountSubListener(subscribers.size()));
+      ::ros::SubscriberStatusCallback connect_cb = subcount->peer_subscribe_callback();
+      //&peer_subscribe_dummy;
       pubs.push_back(n.advertise<S>(ofname, max_qsize,
-				    subcount->peer_subscribe_callback()));
+				    connect_cb));
       sub_listeners.push_back(std::move(subcount));
       std::vector<Sink> sinks = {begin(subscribers), end(subscribers)};
       //create ouflow and setup sinks
@@ -269,8 +291,10 @@ namespace dsaam { namespace ros
 								   size_t max_qsize)
     {
       auto subcount = std::unique_ptr<CountSubListener>(new CountSubListener(1));
+      ::ros::SubscriberStatusCallback connect_cb = subcount->peer_subscribe_callback();
+	  //&peer_subscribe_dummy;
       pubs.push_back(n.advertise<time_message_type>(ifname + "/time/" + name, max_qsize,
-						    subcount->peer_subscribe_callback()));
+						    connect_cb));
       sub_listeners.push_back(std::move(subcount));
       auto &pub = pubs.back();
       using std::placeholders::_1;
@@ -317,6 +341,7 @@ namespace dsaam { namespace ros
     
   private:
     ::ros::NodeHandle n;
+    ::ros::AsyncSpinner async_spinner;
     std::vector<::ros::Subscriber> subs;
     std::vector<::ros::Publisher> pubs;
     std::vector<std::unique_ptr<CountSubListener>> sub_listeners;

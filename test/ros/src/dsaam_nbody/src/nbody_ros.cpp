@@ -66,6 +66,7 @@ public:
 protected:
   virtual void send_state(const time_type & t) override
   {
+    std::cout << "Sending state at "<< t << std::endl;
     mpointer m {new dsaam::ros::ROSMessagePointerHolder{new vm_type()}};
     pm_type &p = const_cast<pm_type&>(m->get_ref<pm_type>());
     p.header.stamp = t;
@@ -116,6 +117,7 @@ int main(int argc, char **argv)
   time_type t = from_nanos(param_int);
   assert(ros::param::get("dt", param_int));
   time_type dt = from_nanos(param_int);
+  std::cout << "GOT DT="<<dt<<std::endl;
   assert(ros::param::get("/stop_time", param_int));
   time_type stop_time = from_secs(param_int);
   assert(ros::param::get("max_qsize",param_int));
@@ -161,7 +163,7 @@ int main(int argc, char **argv)
       add_body(b_name, bodyp);
      
     }
-  OneBSystemNode node{bodies, name, t, dt, max_qsize, stop_time};
+  OneBSystemNode node{bodies, "/" + name, t, dt, max_qsize, stop_time};
 
   auto get_body = [&bodies](const string &n) -> const string&
     {
@@ -174,7 +176,7 @@ int main(int argc, char **argv)
   for(int i=0; i < ptree.size(); i++)
     {
       auto pt = ptree[i];
-      string i_name = pt["name"];
+      string i_name = "/" + string(pt["name"]);
       time_type i_dt = from_nanos(int(pt["dt"]));
       const string &in_body_name = get_body(i_name);
       
@@ -200,7 +202,7 @@ int main(int argc, char **argv)
   for(int i=0; i < ptree.size(); i++)
     {
       auto pt = ptree[i];
-      string o_name = pt["name"];
+      string o_name = "/" + string(pt["name"]);
       time_type o_dt = from_nanos(int(pt["dt"]));
       std::vector<string> sinks;
       auto pt_sinks = pt["sinks"];
@@ -225,11 +227,12 @@ int main(int argc, char **argv)
     }
   
 
+  
   //finish init ROS transport, wait for incoming subscriptions
   node.init_ros();
-
+  std::cout << "ROS INIT DONE\n";
   //start node
   node.start();
-
+  ros::waitForShutdown();
   return 0;
 }

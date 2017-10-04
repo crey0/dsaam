@@ -117,7 +117,7 @@ namespace dsaam
 			     inflows.nextTime()));
       logic_assert(transport_type::time(m) == outflow->time,
 		   to_string("Time contract breached : Invalid message time expected ",
-			     outflow->time + outflow->dt, " got ", transport_type::time(m)));
+			     outflow->time, " got ", transport_type::time(m)));
       outflow->time = outflow->time + outflow->dt;
       
       outflow->send(m);

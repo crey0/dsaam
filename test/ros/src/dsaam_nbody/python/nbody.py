@@ -2,7 +2,7 @@ from dsaam_test.test_nbody import stop_event, except_event, exception_collect, e
     Body, System, SystemOne, SystemDrawer, SystemOneNode, DrawerNode
 import rospy
 from dsaam.ros.ros_node import RosNode, Time
-from geometry_msgs.msg import QuaternionStamped
+from geometry_msgs.msg import QuaternionStamped, PointStamped
 import numpy as np
 from time import sleep
 
@@ -15,18 +15,25 @@ def rosbridge(node):
     @exception_collect
     def _process(name, m, tmin_next):
         s, time, dt = m
-        state = (np.array([s.quaternion.x, s.quaternion.y]),
-                 np.array([s.quaternion.z, s.quaternion.w]))
-        return process(name, (state, time, dt), tmin_next)
+        if name.endswith("position"):
+            state = (np.array([s.point.x, s.point.y]), None)
+        elif name.endswith("speed"):
+            state = (None, np.array([s.quaternion.z, s.quaternion.w]))
+        else:
+            raise RuntimeError("Unknown message "+name)
+        return process(name.split("/")[0], (state, time, dt), tmin_next)
 
     @exception_collect
     def _send(name, state, time):
+        s = PointStamped()
+        s.point.x = state[0][0]
+        s.point.y = state[0][1]
+        send(name, p, time)
         s = QuaternionStamped()
-        s.quaternion.x = state[0][0]
-        s.quaternion.y = state[0][1]
         s.quaternion.z = state[1][0]
         s.quaternion.w = state[1][1]
         send(name, s, time)
+        
         
     node.process = _process
     node.send = _send
@@ -45,7 +52,7 @@ def make_ros_nbody_node():
     ifs = rospy.get_param('inflows')
     bodies = {}
     for i in ifs:
-        i_name = i['name']
+        i_name = i['from']
         i_p = rospy.get_param('/' + i_name + '/body')
         bodies[i_name] = Body(i_name,
                               i_p['position'], i_p['speed'], i_p['mass'], i_p['radius'],
