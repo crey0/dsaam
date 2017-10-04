@@ -187,7 +187,10 @@ def create_launch_file(path, autotest=True):
             }
             yamlp = conf_path + "{}.yaml".format(i)
             create_yaml(yamlp, node_params)
-            launch.node(i, i, runfile, yamlp, "dsaam_nbody")
+            if c == 'blue':
+                launch.node(i, i, runfile_py, yamlp, "dsaam_nbody")
+            else:
+                launch.node(i, i, runfile, yamlp, "dsaam_nbody")
 
     
     c = 'drawer'

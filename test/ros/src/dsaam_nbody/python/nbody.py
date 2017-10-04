@@ -25,14 +25,14 @@ def rosbridge(node):
 
     @exception_collect
     def _send(name, state, time):
-        s = PointStamped()
-        s.point.x = state[0][0]
-        s.point.y = state[0][1]
-        send(name, p, time)
+        p = PointStamped()
+        p.point.x = state[0][0]
+        p.point.y = state[0][1]
+        send(name + "/position", p, time)
         s = QuaternionStamped()
         s.quaternion.z = state[1][0]
         s.quaternion.w = state[1][1]
-        send(name, s, time)
+        send(name + "/speed", s, time)
         
         
     node.process = _process

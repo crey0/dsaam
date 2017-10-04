@@ -58,9 +58,9 @@ class RosNode(Node):
             sinks = []
             for s in sink_names:
                 sinks.append(Sink(name=s, callback=None))
-                subname = "/" + name + "/time/" + s
+                subname = "/" + o['name'] + "/time/" + s
                 self.subscribers[subname] =\
-                    rospy.Subscriber(subname, Header, callback=self.ros_out_time_callback(name, s))
+                    rospy.Subscriber(subname, Header, callback=self.ros_out_time_callback(o['name'], s))
             sinks[0].callback = self.ros_send_callback(o['name'])
             ofs.append(OutFlow(name=o['name'], dt=Time(nanos=o['dt']), sinks=sinks))
 
