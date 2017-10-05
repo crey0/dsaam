@@ -231,7 +231,7 @@ class Node:
         self.indexes = dict([(f.name, idx) for idx, f in enumerate(inflows)])
 
     def push(self, flow, m, time):
-        print("[{}] [{}] pushing IN on flow {}".format(self.time, self.name, flow, self.indexes))
+        #print("[{}] [{}] pushing IN on flow {}".format(self.time, self.name, flow, self.indexes))
         fidx = self.indexes[flow]
         self.inflows.push(fidx, m, time)
 
@@ -243,8 +243,8 @@ class Node:
     
     def next(self):
         name, m, tmin_next = self.inflows.pop()
-        print("[{}] [{}] IN message from {} (at {}, next at {})"
-              .format(self.time, self.name, name, m[1], tmin_next))
+        #print("[{}] [{}] IN message from {} (at {}, next at {})"
+        #      .format(self.time, self.name, name, m[1], tmin_next))
         return name, m, tmin_next
         
 
