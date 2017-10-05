@@ -108,7 +108,7 @@ namespace dsaam
       //std::cout << to_string("[",std::this_thread::get_id(),"] [",time,"] popping on queue ",q.flow.name,"\n");
       auto m = q.queue.pop();
       heap.decrease(q.handle);
-      q.flow.time_callback(nextTime());
+      q.flow.time_callback(FMT::time(m));
       q.flow.callback(std::move(m), nextTime());
     }
 
