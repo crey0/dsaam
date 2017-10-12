@@ -1,4 +1,6 @@
-from dsaam.node import Node, Time, InFlow, OutFlow, Sink, OneThreadNode
+from dsaam.node import Node, InFlow, OutFlow, Sink, Time
+from dsaam.onethreadnode import OneThreadNode
+
 import numpy as np
 from copy import deepcopy
 from threading import Event
@@ -174,7 +176,7 @@ class SystemOneNode(OneThreadNode):
             
 
 class DrawerNode(OneThreadNode):
-    def __init__(self, systemdrawer, *args, **kwargs):
+    def __init__(self, systemdrawer,*args, **kwargs):
         super().__init__(*args, **kwargs)
         self.systemdrawer = deepcopy(systemdrawer)
 
@@ -184,6 +186,7 @@ class DrawerNode(OneThreadNode):
 
     @exception_collect
     def process(self, name, m, tmin_next):
+        print("[drawer] GOT STUFF")
         idx = name
         state, time, dt = m
         self.systemdrawer.system.updateState(idx, state)
@@ -214,9 +217,12 @@ def test_nbody(auto=True):
            'yellow':['yellow-{}'.format(i) for i in range(nyellow)]}
     red_p, red_v = np.random.random((nred,2)), np.zeros((nred,2))
     red_p[0] = [0.5, 0.5]
-    green_p, green_v = np.random.random((ngreen,2)), 0.1 * C * np.random.random((ngreen,2)) - 0.05*C
-    blue_p, blue_v = np.random.random((nblue,2)), 0.1 * C * np.random.random((nblue,2))
-    yellow_p, yellow_v = np.random.random((nyellow,2)), 0.1 * C * np.random.random((nyellow,2)) - 0.05*C
+    green_p, green_v = np.random.random((ngreen,2)), \
+                       0.1 * C * np.random.random((ngreen,2)) - 0.05*C
+    blue_p, blue_v = np.random.random((nblue,2)), \
+                     0.1 * C * np.random.random((nblue,2))
+    yellow_p, yellow_v = np.random.random((nyellow,2)), \
+                         0.1 * C * np.random.random((nyellow,2)) - 0.05*C
 
 #    red_m, green_m, blue_m, yellow_m = \
  #       (1+np.random.random(nred))*100000,\
@@ -250,7 +256,7 @@ def test_nbody(auto=True):
                         'yellow')
                     for i, idx in enumerate(idx['yellow'])}}
     
-    effectors = {'red': {}, 'green': {}, 'blue': {}, 'yellow': {}}
+    effectors = {'red': {}, 'green': {}, 'blue': {}, 'yellow': {}, 'drawer': {}}
     effectors['red'].update(bodies['red'])
     effectors['red'].update(bodies['yellow'])
     effectors['green'].update(bodies['red'])
@@ -260,7 +266,11 @@ def test_nbody(auto=True):
     effectors['yellow'].update(bodies['red'])
     effectors['yellow'].update(bodies['green'])
     effectors['yellow'].update(bodies['blue'])
-
+    effectors['drawer'].update(bodies['red'])
+    effectors['drawer'].update(bodies['green'])
+    effectors['drawer'].update(bodies['blue'])
+    effectors['drawer'].update(bodies['yellow'])
+                               
     def build_systemone(color, i):
         bsys = {}
         bsys.update(effectors[color])
@@ -277,34 +287,25 @@ def test_nbody(auto=True):
         all_bodies.update(b)    
     system_drawer = SystemDrawer(System(all_bodies), (10, 10), 1, auto)
 
-    dt_colors = {'red':Time(0,int(1e8)), 'green':Time(0,int(1e8)), 'blue':Time(0,int(1e8)), 'yellow':Time(0,int(1e8))}
+    dt_colors = {'red':Time(0,int(1e8)), 'green':Time(0,int(1e8)),
+                 'blue':Time(0,int(1e8)), 'yellow':Time(0,int(1e8))}
     dt_draw = Time(1, int(1e8))
     
-    # name, time, dt, inflows, outflows, max_qsize
     def build_systemone_node(s, time, dt, max_qsize):
-        color = s.bodies[s.theone].color
         name = s.bodies[s.theone].name
-        inflows = [InFlow(ni, dt_colors[b.color], time_callback=None) for ni, b in effectors[color].items() if ni != name]
-        sinks=[Sink(sb.name, callback=None)
-               for sb in all_bodies.values()
-               if name in effectors[sb.color] and sb.name != name]
-        sinks.append(Sink('drawer', callback=None))
-        outflows = [OutFlow(name, dt, sinks)]
-        node = SystemOneNode(s, Node(name, time, dt, inflows, outflows, max_qsize))
+        node = SystemOneNode(s, Node(name, time, dt, max_qsize))
         return node
 
     time = Time(0)
     max_qsize = 10
     
-    system_one_nodes = {s.theone: build_systemone_node(s, time, dt_colors[c], max_qsize)
+    system_one_nodes = {s.theone: build_systemone_node(s, time,
+                                                       dt_colors[c], max_qsize)
                             for c in colors for s in system_ones[c].values()}
 
     system_drawer_node = DrawerNode(system_drawer,
-                                    Node('drawer', time, dt_draw,
-                                         [InFlow(ni, dt_colors[b.color], time_callback=None) for ni, b in all_bodies.items()],
-                                         [], #OutFlows
-                                         max_qsize))
-
+                                    Node('drawer', time, dt_draw, max_qsize))
+    
     def get_node(name):
         if name == 'drawer':
             node = system_drawer_node
@@ -312,18 +313,30 @@ def test_nbody(auto=True):
             node = system_one_nodes[name]
         return node
     
-    #update all callbacks
+    #setup flows
     all_nodes = list(system_one_nodes.values())+[system_drawer_node]
     for node in all_nodes:
-        for flow in node.node.inflows.flows:
-            fnode = get_node(flow.name)
-            flow.time_callback = fnode.node.time_callback(flow.name, node.name)
-            print("Time-link {} --> {}".format(node.name, fnode.name))
-        for flow in node.node.outflows.values():
-            for sink in flow.sinks:
-                fnode = get_node(sink.name)
-                sink.callback = fnode.node.push_callback(node.name)
-                print("Mess-link {} --> {}".format(node.name, fnode.name))
+        #setup outflows
+        if node.name != 'drawer':
+            node_color = all_bodies[node.name].color
+            sinks=[Sink(sb.name,
+                        callback=get_node(sb.name).push_callback(node.name))
+                   for sb in all_bodies.values()
+                   if node.name in effectors[sb.color] and sb.name != node.name]
+            sinks.append(Sink('drawer', callback=get_node('drawer').push_callback(node.name)))
+            node.setup_outflow(OutFlow(node.name,
+                                       dt_colors[node_color],
+                                       sinks))
+        else:
+            node_color = 'drawer'
+
+        #setup inflows
+        for ni, b in effectors[node_color].items():
+            if ni != node.name:
+                node.setup_inflow(
+                    InFlow(ni, dt_colors[b.color], callback=node.process,
+                           time_callback=get_node(ni).time_callback(ni,
+                                                                    node.name)))
 
 
     signal.signal(signal.SIGINT, handler_sigint)
@@ -341,12 +354,15 @@ def test_nbody(auto=True):
         while system_drawer_node.time < Time(10)\
               and not stop_event.is_set():
             sleep(0.1)
+            print("[master] {} < {} = {}".format(system_drawer_node.time,Time(10),
+                                                 system_drawer_node.time < Time(10)))
     print("[master] Stopping threads.")
     
     #stop all threads
     for node in system_one_nodes.values():
         print("[master] Stopping node {}".format(node.name))
         node.stop()
+    print("[master] Stopping node {}".format(system_drawer_node.name))
     system_drawer_node.stop()
 
     print("[master] Joining threads...")
