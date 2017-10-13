@@ -7,12 +7,6 @@ import importlib
 import string
 from threading import Semaphore
 
-def get_class(name_string):
-    m_name, c_name = name_string.rsplit('.', maxsplit=1)
-    module = importlib.import_module(m_name)
-    m_class = getattr(module, c_name)
-    return m_class
-
 class CountSubListener(SubscribeListener):
     def __init__(self, num_peers):
         self.semaphore = Semaphore(0)
@@ -31,64 +25,67 @@ class CountSubListener(SubscribeListener):
 
 class RosNode(Node):
 
-    def __init__(self, name):
-        # get global node parameters
-        max_qsize = rospy.get_param('max_qsize')
-        time = Time(nanos=rospy.get_param('start_time'))
-        dt = Time(nanos=rospy.get_param('dt'))
-
-        # TODO: setup management service
-
+    def __init__(self, name, start_time, dt, max_qsize):
+    
         # ROS pubs and subs dicts
         self.publishers = {}
         self.subscribers = {}
-        sublisteners = []
-        
-        # setup outflows
-        p_out = rospy.get_param("outflows")      
-        ofs = []
-        for o in p_out:
-            m_class = get_class(o['message_class'])
-            subl = CountSubListener(num_peers=len(o['sinks']))
-            sublisteners.append(subl)
-            self.publishers[o['name']] = \
-                rospy.Publisher('/'+o['name'], m_class, subscriber_listener=subl,
-                                queue_size=max_qsize)
-            sink_names = o['sinks']
-            sinks = []
-            for s in sink_names:
-                sinks.append(Sink(name=s, callback=None))
-                subname = "/" + o['name'] + "/time/" + s
-                self.subscribers[subname] =\
-                    rospy.Subscriber(subname, Header, callback=self.ros_out_time_callback(o['name'], s))
-            sinks[0].callback = self.ros_send_callback(o['name'])
-            ofs.append(OutFlow(name=o['name'], dt=Time(nanos=o['dt']), sinks=sinks))
-
-        # setup inflows
-        p_in  = rospy.get_param("inflows")        
-        ifs = []
-        subl = CountSubListener(num_peers=len(p_in))
-        sublisteners.append(subl)
-        for i in p_in:
-            m_class = get_class(i['message_class'])
-            self.subscribers[i['name']] = \
-                rospy.Subscriber('/'+i['name'], m_class, callback=self.ros_push_callback(i['name']))
-            
-            ifs.append(InFlow(name=i['name'], dt=Time(nanos=i['dt']),
-                time_callback=self.ros_in_time_callback(i['name'], name, max_qsize, subl)))
+        self.sublisteners = []
 
         # init parent
-        super().__init__(name, time, dt, ifs, ofs, max_qsize)
+        super().__init__(name, start_time, dt, max_qsize)        
 
+
+    def setup_subscriber(self, name, m_class, callback, dt):
+        #create subscriber listener for message processed subscribtion from publisher
+        subl = CountSubListener(num_peers=1)
+        self.sublisteners.append(subl)
+
+        #setup inflow on node
+        inflow = InFlow(name, dt, callback,
+            time_callback=self.ros_in_time_callback(name, self.name,
+                                                    self.default_qsize, subl))
+        self.setup_inflow(inflow)
+
+        #setup corresponding ROS subscriber
+        self.subscribers[name] = \
+            rospy.Subscriber('/'+name, m_class, callback=self.ros_push_callback(name))
+        
+        
+    def setup_publisher(self, name, m_class, dt, sinks = None):
+        #setup corresponding ROS publisher
+        subl = CountSubListener(num_peers=len(sinks))
+        self.sublisteners.append(subl)
+        self.publishers[name] = \
+            rospy.Publisher('/'+name, m_class, subscriber_listener=subl,
+                            queue_size=self.default_qsize)
+        
+        #subscribe to callbacks on message processed by subscribers
+        for s in sinks:
+            subname = "/" + name + "/time/" + s
+            self.subscribers[subname] =\
+                rospy.Subscriber(subname, Header, callback=self.ros_out_time_callback(name, s))
+
+        #create sinks
+        sinks = [sinks, []][sinks is None]
+        sinks = [Sink(s) for s in sinks]
+        sinks[0].callback = self.ros_send_callback(name)
+
+        #setup flow on node
+        outflow = OutFlow(name, dt, sinks)
+        self.setup_outflow(outflow)
+
+
+    def ros_init(self):
         #init node
-        rospy.init_node(name)
+        rospy.init_node(self.name)
         
         # wait for all sinks to be subscribed
-        for s in sublisteners:
+        for s in self.sublisteners:
             s.wait()
 
-        print("[{}] Init DONE".format(name))
-        
+        print("[{}] Init DONE".format(self.name))
+            
     def ros_send_callback(self, flow):
         pub = self.publishers[flow]
         def __cb(m, time):
@@ -130,3 +127,38 @@ class RosNode(Node):
                Time(stamp.secs, stamp.nsecs))
                #Time(dt.secs, dt.nsecs))
         return __cb
+
+
+def get_class(name_string):
+    m_name, c_name = name_string.rsplit('.', maxsplit=1)
+    module = importlib.import_module(m_name)
+    m_class = getattr(module, c_name)
+    return m_class
+    
+def make_rosnode_from_params(name):
+    # get global node parameters
+    max_qsize = rospy.get_param('max_qsize')
+    start_time = Time(nanos=rospy.get_param('start_time'))
+    dt = Time(nanos=rospy.get_param('dt'))
+    node = RosNode(name, start_time, dt, max_qsize)
+    return node
+    
+def setup_rosnode_from_params(node, get_callback):
+    # setup print()ublishers
+    p_out = rospy.get_param("outflows")      
+    for o in p_out:
+        m_class = get_class(o['message_class'])
+        sinks = o['sinks']
+        node.setup_publisher(o['name'], m_class,
+                             Time(nanos=o['dt']), sinks)
+
+    # setup subscribers
+    p_in  = rospy.get_param("inflows")        
+    for i in p_in:
+        m_class = get_class(i['message_class'])
+        callback = get_callback(i['name'], i['message_class'])
+        node.setup_subscriber(i['name'], m_class, callback,
+                              Time(nanos=i['dt']))
+
+    node.ros_init()
+

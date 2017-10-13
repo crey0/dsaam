@@ -1,7 +1,7 @@
 from dsaam_test.test_nbody import stop_event, except_event, exception_collect, excepts,\
     Body, System, SystemOne, SystemDrawer, SystemOneNode, DrawerNode
 import rospy
-from dsaam.ros.ros_node import RosNode, Time
+from dsaam.ros.ros_node import Time, make_rosnode_from_params, setup_rosnode_from_params
 from geometry_msgs.msg import QuaternionStamped, PointStamped
 import numpy as np
 from time import sleep
@@ -58,7 +58,7 @@ def make_ros_nbody_node():
                               i_p['position'], i_p['speed'], i_p['mass'], i_p['radius'],
                               i_p['color'])
 
-    ros_node = RosNode(name)
+    ros_node = make_rosnode_from_params(name)
     if name.startswith('drawer'):
         system = System(bodies)
         size = rospy.get_param('size')
@@ -74,6 +74,8 @@ def make_ros_nbody_node():
         s_one = SystemOne(name, bodies)
         node = rosbridge(SystemOneNode(s_one, ros_node))
 
+    setup_rosnode_from_params(ros_node, lambda *args:  node.process)
+    
     return node
 
 
