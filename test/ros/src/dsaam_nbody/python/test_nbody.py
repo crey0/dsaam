@@ -116,7 +116,10 @@ def create_launch_file(path, autotest=True):
     }
      
     start_time = Time(0)
-    stop_time = Time(1000)
+    if not autotest:
+        stop_time = Time(0)
+    else:
+        stop_time = Time(10)
     max_qsize = 10
 
     draw_size = (10, 10)

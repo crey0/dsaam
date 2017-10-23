@@ -72,7 +72,7 @@ namespace dsaam
       cv.notify_one();
 
       OutFlow<M,T,F>::send(message);
-      std::cout << "Sent message on flow " << this->name << " time " << this->time << std::endl;
+      //std::cout << "Sent message on flow " << this->name << " time " << this->time << std::endl;
       //this->time  = this->time + this->dt;
     }
     

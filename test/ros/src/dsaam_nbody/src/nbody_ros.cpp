@@ -66,7 +66,7 @@ public:
 protected:
   virtual void send_state(const time_type & t) override
   {
-    std::cout << "Sending state at "<< t << std::endl;
+    //std::cout << "Sending state at "<< t << std::endl;
     mpointer m {new dsaam::ros::ROSMessagePointerHolder{new vm_type()}};
     pm_type &p = const_cast<pm_type&>(m->get_ref<pm_type>());
     p.header.stamp = t;
@@ -110,14 +110,14 @@ int main(int argc, char **argv)
 
   string name;
   assert(ros::param::get("name", name));
-  std::cout << "This node has name " << name << std::endl; 
+  std::cout << "[" << name << "] Building node" << std::endl;
+
 
   int param_int;
   assert(ros::param::get("start_time", param_int));
   time_type t = from_nanos(param_int);
   assert(ros::param::get("dt", param_int));
   time_type dt = from_nanos(param_int);
-  std::cout << "GOT DT="<<dt<<std::endl;
   assert(ros::param::get("/stop_time", param_int));
   time_type stop_time = from_secs(param_int);
   assert(ros::param::get("max_qsize",param_int));
@@ -230,9 +230,11 @@ int main(int argc, char **argv)
   
   //finish init ROS transport, wait for incoming subscriptions
   node.init_ros();
-  std::cout << "ROS INIT DONE\n";
   //start node
+  std::cout << "[" << node.name << "] Starting node" << std::endl;
   node.start();
   ros::waitForShutdown();
+  std::cout << "[" << node.name << "] Node stopped" << std::endl;
+
   return 0;
 }

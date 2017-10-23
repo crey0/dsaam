@@ -153,7 +153,7 @@ namespace dsaam
 	    //std::cout << to_string("[",time(),"] [",name,"] nextAt=", nextAt(), " STEPPING to t=",t) << std::endl;
 	    step(t); this->stepTime(t); t = t + dt; }
 	}
-      std::cout << to_string("[",this->time(),"] [",this->name,"] STOP \n");
+      //std::cout << to_string("[",this->time(),"] [",this->name,"] STOP \n");
     }
 
 

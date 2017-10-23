@@ -13,7 +13,7 @@ from time import time as systime
 
 stop_event = Event()
 except_event = Event()
-excepts = Queue() 
+excepts = Queue()
 
 def exception_collect(fun):
     def _fun(*args, **kwargs):
@@ -160,8 +160,8 @@ class SystemOneNode(OneThreadNode):
         
         newTime = self.time
         while tmin_next >= newTime + self.dt:
-            print("[{}] [{}] Computing next step {} -- > {}"\
-                  .format(self.time, self.name, newTime, newTime+self.dt))
+            #print("[{}] [{}] Computing next step {} -- > {}"\
+            #      .format(self.time, self.name, newTime, newTime+self.dt))
             dt_secf = float(self.dt.sec) + float(self.dt.nanos)*1e-9
             self.systemone.integrateOne(dt_secf)
             stateOne = self.systemone.oneState()
@@ -169,8 +169,8 @@ class SystemOneNode(OneThreadNode):
             newTime = newTime + self.dt
             self.send(name, stateOne, newTime)
 
-        if newTime > self.time:
-            print("[{}] [{}] Stepping at {}".format(self.time, self.name, newTime))
+        #if newTime > self.time:
+        #    print("[{}] [{}] Stepping at {}".format(self.time, self.name, newTime))
         return newTime
         
             
@@ -186,7 +186,6 @@ class DrawerNode(OneThreadNode):
 
     @exception_collect
     def process(self, name, m, tmin_next):
-        print("[drawer] GOT STUFF")
         idx = name
         state, time, dt = m
         self.systemdrawer.system.updateState(idx, state)
@@ -203,6 +202,9 @@ class DrawerNode(OneThreadNode):
 
 def test_nbody(auto=True):
     global stop_event
+
+    stop_time = Time(10)
+    
     colors = ['red', 'green', 'blue', 'yellow']
     #nred, ngreen, nblue, nyellow = 1, 7, 11, 1
     nred, ngreen, nblue, nyellow = 1, 2, 3, 5
@@ -347,11 +349,11 @@ def test_nbody(auto=True):
         node.start()
     system_drawer_node.start()
 
-    #wait on stop signal or simulate 10 seconds if auto is set
+    #wait on stop signal or simulate at least 10 seconds if auto is set
     if not auto:
         stop_event.wait()
     else:
-        while system_drawer_node.time < Time(10)\
+        while system_drawer_node.time < stop_time\
               and not stop_event.is_set():
             sleep(0.1)
             print("[master] {} < {} = {}".format(system_drawer_node.time,Time(10),

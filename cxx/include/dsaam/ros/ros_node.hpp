@@ -16,13 +16,6 @@ namespace ros
 
 namespace dsaam { namespace ros
 {
-  void peer_subscribe_dummy(const ::ros::SingleSubscriberPublisher & sub)
-  {
-    std::cout << "DUMMY PEER SUBSCRIBE || " << "Peer " << sub.getSubscriberName()
-	      << " subscribed to " <<  sub.getTopic() << std::endl;
-  }
-  
-  
   
   class CountSubListener
   {
@@ -36,8 +29,8 @@ namespace dsaam { namespace ros
 
     void peer_subscribe(const ::ros::SingleSubscriberPublisher & sub)
     {
-      std::cout << "GOOD || Peer " << sub.getSubscriberName() << " subscribed to " <<  sub.getTopic() <<
-	"(n=" << num_peers << ")" << std::endl;
+      std::cout << "Peer " << sub.getSubscriberName() << " subscribed to " <<  sub.getTopic() <<
+	" (n=" << num_peers << ")" << std::endl;
       sub_sem.increase();
     }
 
@@ -60,12 +53,12 @@ namespace dsaam { namespace ros
     void wait()
     {
       
-      std::cout << "Waiting on " << num_peers << " peers " << std::endl;
+      //std::cout << "Waiting on " << num_peers << " peers " << std::endl;
       for(size_t i=0; i< num_peers; i++)
 	{
 	  sub_sem.decrease();
 	}
-      std::cout << "Waiting DONE" << std::endl;
+      //std::cout << "Waiting DONE" << std::endl;
     }
     
   private:
@@ -292,7 +285,6 @@ namespace dsaam { namespace ros
     {
       auto subcount = std::unique_ptr<CountSubListener>(new CountSubListener(1));
       ::ros::SubscriberStatusCallback connect_cb = subcount->peer_subscribe_callback();
-	  //&peer_subscribe_dummy;
       pubs.push_back(n.advertise<time_message_type>(ifname + "/time/" + name, max_qsize,
 						    connect_cb));
       sub_listeners.push_back(std::move(subcount));

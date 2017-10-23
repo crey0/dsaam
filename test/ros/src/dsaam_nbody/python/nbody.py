@@ -7,6 +7,7 @@ import numpy as np
 from time import sleep
 
 autotest = False
+stop_time = None
 
 def rosbridge(node):
     process = node.process
@@ -43,12 +44,14 @@ def shutdown_hook():
     stop_event.set()
 
 def make_ros_nbody_node():
-    global autotest
+    global autotest, stop_time
     
     name = rospy.get_param("name")
     print('[{}] Building node'.format(name))
     autotest = rospy.get_param('/autotest')
-
+    if autotest:
+        stop_time = Time(sec=rospy.get_param('/stop_time'))
+        
     ifs = rospy.get_param('inflows')
     bodies = {}
     for i in ifs:
@@ -88,10 +91,12 @@ if __name__== '__main__':
     if not autotest:
         stop_event.wait()
     else:
-        while node.time < Time(10)\
+        while node.time < stop_time\
               and not stop_event.is_set():
             sleep(0.1)
     if not rospy.is_shutdown():
         rospy.signal_shutdown("Internal error during execution")
     node.join(0.1)
+    print('[{}] Node stopped'.format(node.name))
+
     assert not except_event.is_set(), "Failure with {} exceptions".format(excepts.qsize())

@@ -166,7 +166,7 @@ public:
     system.integrate(to - this->time());
     //send updated position and speed
     this->send_state(to);
-    if(to + this->dt > stop_time) this->stop();
+    if(stop_time > time_type() && to + this->dt > stop_time) this->stop();
 
   }
  

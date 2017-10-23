@@ -84,7 +84,7 @@ class RosNode(Node):
         for s in self.sublisteners:
             s.wait()
 
-        print("[{}] Init DONE".format(self.name))
+        #print("[{}] Init DONE".format(self.name))
             
     def ros_send_callback(self, flow):
         pub = self.publishers[flow]

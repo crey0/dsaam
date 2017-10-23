@@ -58,7 +58,7 @@ class Node:
         self.time = copy(time)
         
     def push(self, flow, m, time):
-        print("[{}] [{}] pushing IN on flow {}".format(self.time, self.name, flow, self.indexes))
+        #print("[{}] [{}] pushing IN on flow {}".format(self.time, self.name, flow, self.indexes))
         fidx = self.indexes[flow]
         self.inflows.push(fidx, m, time)
 
@@ -69,7 +69,6 @@ class Node:
         return lambda time: self.outflows[flow].push_time(sink, time)
     
     def next(self):
-        print("[{}] next".format(self.name))
         return self.inflows.next()
 
     def send(self, flow, m, time):
@@ -80,7 +79,7 @@ class Node:
             "Time contract breached: attempt to send outgoing message at {} but expecting "\
             "next incoming message at {}".format(time, self.inflows.nextTime())
 
-        print("[{}] [{}] OUT message on  {} at {}".format(self.time, self.name, flow, time))
+        #print("[{}] [{}] OUT message on  {} at {}".format(self.time, self.name, flow, time))
         self.outflows[flow].send(m, time)
 
     def send_callback(self, flow):
