@@ -4,16 +4,22 @@ NS_IN_SECOND = 1000000000
     
 class Time:
     def __init__(self, sec=0, nanos=0):
-        assert(type(sec) is int)
-        assert(type(nanos) is int)
-        
-        self.sec = sec
-        self.nanos = nanos
+        assert type(sec) is int,\
+            "Time.__init__ : Expected sec=int first parameter, got {}"\
+            .format(sec.__class__)
+        assert type(nanos) is int,\
+            "Time.__init__ : Expected nanos=int second parameter, got {}"\
+            .format(nanos.__class__)
 
+        self.sec = sec + nanos // NS_IN_SECOND
+        self.nanos = nanos % NS_IN_SECOND
+
+        
     def __call__(self, other):
-        assert(isinstance(self, Time))
-        self.sec = sec
-        self.nanos = nanos
+        assert isinstance(self, Time),\
+            "Time.__call__ : Expected Time parameter, got {}".format(other.__class__)
+        self.sec = other.sec
+        self.nanos = other.nanos
 
     def to_nanos(self):
         return self.sec * NS_IN_SECOND + self.nanos
