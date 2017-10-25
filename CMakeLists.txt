@@ -27,4 +27,8 @@ find_package(Threads REQUIRED)
 add_executable(nbody_threads test/cxx/nbody_threads.cpp)
 target_link_libraries(nbody_threads Threads::Threads)
 
+install(DIRECTORY cxx/ DESTINATION ${CMAKE_INSTALL_PREFIX}
+  USE_SOURCE_PERMISSIONS
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+
 #add_subdirectory(test/ros/src)
