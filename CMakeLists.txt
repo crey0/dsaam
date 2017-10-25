@@ -21,18 +21,10 @@ MESSAGE(STATUS "BUILD TYPE:" ${CMAKE_BUILD_TYPE})
 
 INCLUDE_DIRECTORIES(cxx/include)
 
-set(DSAAM_SRCS
-  cxx/src/dsaam/node.cpp
-  )
-
-add_library(dsaam ${DSAAM_SRCS})
-target_link_libraries(dsaam)
-
-
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 add_executable(nbody_threads test/cxx/nbody_threads.cpp)
-target_link_libraries(nbody_threads dsaam Threads::Threads)
+target_link_libraries(nbody_threads Threads::Threads)
 
-add_subdirectory(test/ros/src)
+#add_subdirectory(test/ros/src)
