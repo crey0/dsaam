@@ -42,7 +42,7 @@ class MessageFlowMultiplexer:
         self.tmin_next = tmin_next
         return self.flows[idx].callback(q.name, m, tmin_next)
 
-    def nextTime(self):
+    def next_time(self):
         return self.tmin_next
 
     def setup_inflow(self, flow):

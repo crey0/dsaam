@@ -35,7 +35,7 @@ class Node:
          if len(self.inflows.flows) == 0:
             self.next = lambda: (None, (None, self.time, self.dt),
                                  self.time + self.dt)
-            self.inflows.nextTime = lambda: self.time + self.dt
+            self.inflows.next_time = lambda: self.time + self.dt
         
     def setup_inflow(self, flow):
         self.inflows.setup_inflow(flow)
@@ -70,14 +70,17 @@ class Node:
     
     def next(self):
         return self.inflows.next()
+    
+    def next_time(self):
+        return self.inflows.next_time()
 
     def send(self, flow, m, time):
         assert time >= self.time,\
             "Time contract breached: sending in the past is forbiden, message at {},"\
             " self time is {}".format(time, self.time)
-        assert self.inflows.nextTime() >= time,\
+        assert self.inflows.next_time() >= time,\
             "Time contract breached: attempt to send outgoing message at {} but expecting "\
-            "next incoming message at {}".format(time, self.inflows.nextTime())
+            "next incoming message at {}".format(time, self.inflows.next_time())
 
         #print("[{}] [{}] OUT message on  {} at {}".format(self.time, self.name, flow, time))
         self.outflows[flow].send(m, time)
