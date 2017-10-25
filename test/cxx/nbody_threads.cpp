@@ -52,9 +52,6 @@ void p_callback(Body &b, const mpointer & pm, const dsaam::Time &)
 {
   if(!pm) return;
   auto pmp = static_cast<const PMessage *>(pm.get());
-  //std::cout << dsaam::to_string("[", pmp->time, "]", "[",_self.name,"] pos update of ", b.name,
-  //				  " next at ",nextAt)
-  //	      << std::endl;
   b.p = pmp->p;
 }
   
@@ -62,9 +59,6 @@ void v_callback(Body & b, const mpointer & pm,  const dsaam::Time &)
 {
   if(!pm) return;
   auto pmv = static_cast<const VMessage *>(pm.get());
-  //std::cout << dsaam::to_string("[", pmv->time, "]", "[",_self.name,"] spe update of ", b.name,
-  //				  " next at ",nextAt)
-  //	      << std::endl;
   b.v = pmv->v;
 }
 
@@ -100,6 +94,9 @@ public:
 protected:
   void send_state(const dsaam::Time & t) override
   {
+    //std::cout << dsaam::to_string("[",t,"] ",
+    //				  "[",system.self().name ,"] ",
+    //				  "Sending state\n");
     mpointer m = \
       mpointer(new PMessage(system.self().p, t));
     send_p(std::move(m));
