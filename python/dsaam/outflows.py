@@ -15,8 +15,10 @@ class OutMessageFlow:
     def push_time(self, name, time):
         with self.lock:
             t, s = self.sink_times[name]
-            assert t < time, "Time contract breached: time callback indicates messages are not "\
-                "processed in order: was {}, update in the past at {}".format(t, time)
+            assert t < time, "Flow {} : time contract breached, ACK "\
+                "of {} indicates messages are not processed in order: was {}, "\
+                "update in the past at {}"\
+                .format(self.name, name, t, time)
 
             self.sink_times[name][0] = copy(time)
             s.release()
@@ -26,8 +28,9 @@ class OutMessageFlow:
             s.acquire()
         with self.lock:
             assert self.time + self.dt == time,\
-                "Time contract breached for next message, should be at {} but is at {}"\
-                .format(self.time + self.dt, time)
+                "Flow {} : time contract breached for next message, should be "\
+                "at {} but is at {}"\
+                .format(self.name, self.time + self.dt, time)
 
             self.time = time
             for s in self.sinks:
