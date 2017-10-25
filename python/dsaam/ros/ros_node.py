@@ -53,6 +53,9 @@ class RosNode(Node):
         
         
     def setup_publisher(self, name, m_class, dt, sinks = None):
+        #If sinks is None set to empty list
+        sinks = [sinks, []][sinks is None]
+        
         #setup corresponding ROS publisher
         subl = CountSubListener(num_peers=len(sinks))
         self.sublisteners.append(subl)
@@ -67,18 +70,19 @@ class RosNode(Node):
                 rospy.Subscriber(subname, Header, callback=self.ros_out_time_callback(name, s))
 
         #create sinks
-        sinks = [sinks, []][sinks is None]
         sinks = [Sink(s) for s in sinks]
-        sinks[0].callback = self.ros_send_callback(name)
+        if len(sinks) > 0:
+            sinks[0].callback = self.ros_send_callback(name)
 
         #setup flow on node
         outflow = OutFlow(name, dt, sinks)
         self.setup_outflow(outflow)
 
 
-    def ros_init(self):
+    def ros_init(self, init_node=True):
         #init node
-        rospy.init_node(self.name)
+        if(init_node):
+            rospy.init_node(self.name)
         
         # wait for all sinks to be subscribed
         for s in self.sublisteners:
