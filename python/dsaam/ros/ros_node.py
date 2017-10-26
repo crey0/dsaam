@@ -25,7 +25,7 @@ class CountSubListener(SubscribeListener):
 
 class RosNode(Node):
 
-    def __init__(self, name, start_time, dt, max_qsize):
+    def __init__(self, name, start_time, dt, default_qsize):
     
         # ROS pubs and subs dicts
         self.publishers = {}
@@ -33,19 +33,19 @@ class RosNode(Node):
         self.sublisteners = []
 
         # init parent
-        super().__init__(name, start_time, dt, max_qsize)        
+        super().__init__(name, start_time, dt, default_qsize)        
 
 
     def setup_subscriber(self, name, m_class, callback, start_time, dt, queue_size=0):
         #if queue_size is zero use default queue size
-        queue_size = [queue_size, default_qsize] [queue_size <= 0]
+        queue_size = [queue_size, self.default_qsize] [queue_size <= 0]
         
         #create subscriber listener for message processed subscribtion from publisher
         subl = CountSubListener(num_peers=1)
         self.sublisteners.append(subl)
 
         #setup inflow on node
-        inflow = InFlow(name, start_time, dt, callback,
+        inflow = InFlow(name, start_time, dt, queue_size, callback,
             time_callback=self.ros_in_time_callback(name, self.name,
                                                     queue_size, subl))
         self.setup_inflow(inflow)
@@ -55,9 +55,9 @@ class RosNode(Node):
             rospy.Subscriber('/'+name, m_class, callback=self.ros_push_callback(name))
         
         
-    def setup_publisher(self, name, m_class, start_time, dt, sinks = None, queue_size = 0):
+    def setup_publisher(self, name, m_class, start_time, dt, queue_size = 0, sinks = None):
         #if queue_size is zero use default queue size
-        queue_size = [queue_size, default_qsize] [queue_size <= 0]
+        queue_size = [queue_size, self.default_qsize] [queue_size <= 0]
         
         #If sinks is None set to empty list
         sinks = [sinks, []][sinks is None]
@@ -81,7 +81,7 @@ class RosNode(Node):
             sinks[0].callback = self.ros_send_callback(name)
 
         #setup flow on node
-        outflow = OutFlow(name, start_time, dt, sinks)
+        outflow = OutFlow(name, start_time, dt, queue_size, sinks)
         self.setup_outflow(outflow)
 
 
