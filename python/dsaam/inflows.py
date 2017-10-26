@@ -10,7 +10,7 @@ class MessageFlowMultiplexer:
         self.flows = flows
         self.queues = []
         for flow in flows:
-            self.queues.append(MessageQueue(flow.name, Time() - flow.dt, flow.dt))
+            self.queues.append(MessageQueue(flow.name, flow.time - flow.dt, flow.dt))
 
     def push(self, flow_index, m, time):
         self.queues[flow_index].push(m, time)
@@ -47,4 +47,4 @@ class MessageFlowMultiplexer:
 
     def setup_inflow(self, flow):
         self.flows.append(flow)
-        self.queues.append(MessageQueue(flow.name, Time() - flow.dt, flow.dt))
+        self.queues.append(MessageQueue(flow.name, flow.time - flow.dt, flow.dt))

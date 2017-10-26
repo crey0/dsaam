@@ -326,8 +326,9 @@ def test_nbody(auto=True):
                    for sb in all_bodies.values()
                    if node.name in effectors[sb.color] and sb.name != node.name]
             sinks.append(Sink('drawer', callback=get_node('drawer').push_callback(node.name)))
-            node.setup_outflow(OutFlow(node.name,
+            node.setup_outflow(OutFlow(node.name, time,
                                        dt_colors[node_color],
+                                       0, # qsize
                                        sinks))
         else:
             node_color = 'drawer'
@@ -336,7 +337,9 @@ def test_nbody(auto=True):
         for ni, b in effectors[node_color].items():
             if ni != node.name:
                 node.setup_inflow(
-                    InFlow(ni, dt_colors[b.color], callback=node.process,
+                    InFlow(ni, time, dt_colors[b.color],
+                           qsize = 0,
+                           callback=node.process,
                            time_callback=get_node(ni).time_callback(ni,
                                                                     node.name)))
 

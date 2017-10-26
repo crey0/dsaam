@@ -38,6 +38,6 @@ def namedlist(name, members):
     members = tuple(members)
     return type(name, (NamedMutableSequence,), {'__slots__': members})  
         
-InFlow = namedlist('InFlow', ['name', 'dt', 'callback', 'time_callback'])
-OutFlow = namedlist('OutFlow', ['name','dt', 'sinks'])
+InFlow = namedlist('InFlow', ['name', 'time', 'dt', 'qsize', 'callback', 'time_callback'])
+OutFlow = namedlist('OutFlow', ['name', 'time', 'dt', 'qsize', 'sinks'])
 Sink = namedlist('Sink', ['name', 'callback'])

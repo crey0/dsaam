@@ -25,7 +25,7 @@ class Node:
         outflows = copy(outflows)
         self.inflows = MessageFlowMultiplexer(inflows, time)
         self.indexes = dict([(f.name, idx) for idx, f in enumerate(inflows)])
-        self.outflows = dict([(f.name, OutMessageFlow(f.name, time, f.dt,
+        self.outflows = dict([(f.name, OutMessageFlow(f.name, flow.time, f.dt,
                                                       f.sinks,
                                                       max_qsize))
                               for f in outflows])
@@ -38,14 +38,16 @@ class Node:
             self.inflows.next_time = lambda: self.time + self.dt
         
     def setup_inflow(self, flow):
+        flow.qsize = [self.default_qsize, flow.qsize][flow.qsize > 0]
         self.inflows.setup_inflow(flow)
         self.indexes[flow.name] = len(self.inflows.flows) - 1
 
     def setup_outflow(self, flow):
         assert(flow.name not in self.outflows)
-        self.outflows[flow.name] = OutMessageFlow(flow.name, self.time, flow.dt,
+        flow.qsize = [self.default_qsize, flow.qsize][flow.qsize > 0]
+        self.outflows[flow.name] = OutMessageFlow(flow.name, flow.time, flow.dt,
                                                   flow.sinks,
-                                                  self.default_qsize)
+                                                  flow.qsize)
 
     def setup_sink(self, flow_name, sink):
        self.outflows[flow_name].setup_sink(sink)

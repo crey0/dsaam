@@ -36,15 +36,18 @@ class RosNode(Node):
         super().__init__(name, start_time, dt, max_qsize)        
 
 
-    def setup_subscriber(self, name, m_class, callback, dt):
+    def setup_subscriber(self, name, m_class, callback, start_time, dt, queue_size=0):
+        #if queue_size is zero use default queue size
+        queue_size = [queue_size, default_qsize] [queue_size <= 0]
+        
         #create subscriber listener for message processed subscribtion from publisher
         subl = CountSubListener(num_peers=1)
         self.sublisteners.append(subl)
 
         #setup inflow on node
-        inflow = InFlow(name, dt, callback,
+        inflow = InFlow(name, start_time, dt, callback,
             time_callback=self.ros_in_time_callback(name, self.name,
-                                                    self.default_qsize, subl))
+                                                    queue_size, subl))
         self.setup_inflow(inflow)
 
         #setup corresponding ROS subscriber
@@ -52,7 +55,10 @@ class RosNode(Node):
             rospy.Subscriber('/'+name, m_class, callback=self.ros_push_callback(name))
         
         
-    def setup_publisher(self, name, m_class, dt, sinks = None):
+    def setup_publisher(self, name, m_class, start_time, dt, sinks = None, queue_size = 0):
+        #if queue_size is zero use default queue size
+        queue_size = [queue_size, default_qsize] [queue_size <= 0]
+        
         #If sinks is None set to empty list
         sinks = [sinks, []][sinks is None]
         
@@ -61,7 +67,7 @@ class RosNode(Node):
         self.sublisteners.append(subl)
         self.publishers[name] = \
             rospy.Publisher('/'+name, m_class, subscriber_listener=subl,
-                            queue_size=self.default_qsize)
+                            queue_size=queue_size)
         
         #subscribe to callbacks on message processed by subscribers
         for s in sinks:
@@ -75,7 +81,7 @@ class RosNode(Node):
             sinks[0].callback = self.ros_send_callback(name)
 
         #setup flow on node
-        outflow = OutFlow(name, dt, sinks)
+        outflow = OutFlow(name, start_time, dt, sinks)
         self.setup_outflow(outflow)
 
 
@@ -149,12 +155,16 @@ def make_rosnode_from_params(name):
     
 def setup_rosnode_from_params(node, get_callback):
     # setup print()ublishers
+    start_time = node.time
+    
     p_out = rospy.get_param("outflows")      
     for o in p_out:
         m_class = get_class(o['message_class'])
         sinks = o['sinks']
         node.setup_publisher(o['name'], m_class,
-                             Time(nanos=o['dt']), sinks)
+                             start_time, Time(nanos=o['dt']),
+                             0, # qsize
+                             sinks)
 
     # setup subscribers
     p_in  = rospy.get_param("inflows")        
@@ -162,7 +172,8 @@ def setup_rosnode_from_params(node, get_callback):
         m_class = get_class(i['message_class'])
         callback = get_callback(i['name'], i['message_class'])
         node.setup_subscriber(i['name'], m_class, callback,
-                              Time(nanos=i['dt']))
+                              start_time, Time(nanos=i['dt']),
+                              qsize=0)
 
     node.ros_init()
 
