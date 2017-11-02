@@ -12,7 +12,8 @@ namespace ros
 }
 #include<ros/message_traits.h>
 #include<std_msgs/Header.h>
-#include <dsaam/node.hpp>
+#include<dsaam/node.hpp>
+#include<unordered_set>
 
 namespace dsaam { namespace ros
 {
@@ -20,17 +21,25 @@ namespace dsaam { namespace ros
   class CountSubListener
   {
   public:
-    CountSubListener(size_t num_peers) : num_peers(num_peers), sub_sem(0)
-    {
-      //TODO change this ?
-      _peer_sub_cb =  boost::bind(&CountSubListener::peer_subscribe, this, _1);
-      _peer_unsub_cb = boost::bind(&CountSubListener::peer_unsubscribe, this, _1);
-    }
+    CountSubListener(const std::vector<string> &peers)
+      : CountSubListener(peers, peers.size())
+    {}
+    
+    CountSubListener(size_t num_peers)
+      : CountSubListener(std::vector<string>(), num_peers)
+    {}
 
     void peer_subscribe(const ::ros::SingleSubscriberPublisher & sub)
     {
-      std::cout << "Peer " << sub.getSubscriberName() << " subscribed to " <<  sub.getTopic() <<
-	" (n=" << num_peers << ")" << std::endl;
+      if(peers.size() > 0 && peers.count(sub.getSubscriberName().substr(1)) == 0)
+	{
+	  std::cout << "Peer " << sub.getSubscriberName() << " subscribed to "
+		    <<  sub.getTopic() << " (unawaited)" << std::endl;
+	  return;
+	}
+	
+      std::cout << "Peer " << sub.getSubscriberName() << " subscribed to "
+		<<  sub.getTopic() << " (n=" << num_peers << ")" << std::endl;
       sub_sem.increase();
     }
 
@@ -60,10 +69,20 @@ namespace dsaam { namespace ros
 	}
       //std::cout << "Waiting DONE" << std::endl;
     }
+
+  private:
+    CountSubListener(const std::vector<string> &peers, size_t num_peers)
+      : peers(peers.begin(), peers.end()), num_peers(num_peers), sub_sem(0)
+      {	
+	//TODO change this ?
+	_peer_sub_cb =  boost::bind(&CountSubListener::peer_subscribe, this, _1);
+	_peer_unsub_cb = boost::bind(&CountSubListener::peer_unsubscribe, this, _1);
+      }
     
   private:
     ::ros::SubscriberStatusCallback _peer_sub_cb;
     ::ros::SubscriberStatusCallback _peer_unsub_cb;
+    std::unordered_set<string> peers;
     size_t num_peers;
     Semaphore sub_sem;
     
@@ -237,7 +256,7 @@ namespace dsaam { namespace ros
 		    std::vector<string> subscribers,
 		    size_t max_qsize = 0)
     {      
-      auto subcount = std::unique_ptr<CountSubListener>(new CountSubListener(subscribers.size()));
+      auto subcount = std::unique_ptr<CountSubListener>(new CountSubListener(subscribers));
       ::ros::SubscriberStatusCallback connect_cb = subcount->peer_subscribe_callback();
       //&peer_subscribe_dummy;
       pubs.push_back(n.advertise<S>(ofname, max_qsize,

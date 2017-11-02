@@ -6,14 +6,26 @@ from std_msgs.msg import Header
 import importlib
 import string
 from threading import Semaphore
+from copy import copy
 
 class CountSubListener(SubscribeListener):
-    def __init__(self, num_peers):
+    def __init__(self, peers = None, num_peers = 0):
+        self.peers = copy(peers)
+        if self.peers is None:
+            self.num_peers = num_peers
+        else:
+            self.num_peers = len(peers)
         self.semaphore = Semaphore(0)
-        self.num_peers = num_peers
      	
     def peer_subscribe(self, topic_name, topic_publish, peer_publish):
-        print("Peer subscribed to {} (n={})".format(topic_name, self.num_peers))
+        #hack to get the subscriber node id, in order to perform checks
+        peer_id = peer_publish.__closure__[0].cell_contents._connection.endpoint_id[1:]
+        if self.peers is not None and not peer_id in self.peers: # peer not awaited
+            print("Peer {} subscribed to {} (unawaited)".format(peer_id, topic_name,
+                                                           self.num_peers))
+            return
+        
+        print("Peer {} subscribed to {} (n={})".format(peer_id, topic_name, self.num_peers))
         self.semaphore.release()
 
     def peer_unsubscribe(self, topic_name, num_peers):
@@ -39,15 +51,10 @@ class RosNode(Node):
     def setup_subscriber(self, name, m_class, callback, start_time, dt, queue_size=0):
         #if queue_size is zero use default queue size
         queue_size = [queue_size, self.default_qsize] [queue_size <= 0]
-        
-        #create subscriber listener for message processed subscribtion from publisher
-        subl = CountSubListener(num_peers=1)
-        self.sublisteners.append(subl)
 
         #setup inflow on node
         inflow = InFlow(name, start_time, dt, queue_size, callback,
-            time_callback=self.ros_in_time_callback(name, self.name,
-                                                    queue_size, subl))
+            time_callback=self.ros_in_time_callback(name, self.name, queue_size))
         self.setup_inflow(inflow)
 
         #setup corresponding ROS subscriber
@@ -63,7 +70,7 @@ class RosNode(Node):
         sinks = [sinks, []][sinks is None]
         
         #setup corresponding ROS publisher
-        subl = CountSubListener(num_peers=len(sinks))
+        subl = CountSubListener(sinks)
         self.sublisteners.append(subl)
         self.publishers[name] = \
             rospy.Publisher('/'+name, m_class, subscriber_listener=subl,
@@ -106,9 +113,12 @@ class RosNode(Node):
             pub.publish(m)
         return __cb
 
-    def ros_in_time_callback(self, flow, name, max_qsize, sub_listen):
+    def ros_in_time_callback(self, flow, name, max_qsize):
         pname = "/" + flow + "/time/" + name
         if pname not in self.publishers:
+            #create subscriber listener for message processed subscribtion from publisher
+            sub_listen = CountSubListener(num_peers=1)
+            self.sublisteners.append(sub_listen)
             self.publishers[pname] = rospy.Publisher(pname, Header, subscriber_listener=sub_listen,
                                                      queue_size=max_qsize)
         tpub = self.publishers[pname]
