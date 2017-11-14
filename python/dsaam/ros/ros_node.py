@@ -109,6 +109,7 @@ class RosNode(Node):
             #print("[{}] OUT ROS message on flow {} / {}".format(self.name, flow, time))
             h = Header()
             h.stamp = rospy.Time(time.sec, time.nanos)
+            h.frame_id = m.header.frame_id
             m.header = h
             pub.publish(m)
         return __cb
