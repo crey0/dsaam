@@ -14,14 +14,14 @@ namespace dsaam
     MessageQueue(const T &start_time,const T &dt, unsigned int max_size)
       : Queue<M>(max_size), nextTime(start_time), dt(dt) {}
 
-    M && pop()
+    M pop()
     {
-      M && m = Queue<M>::pop();
+      M m = Queue<M>::pop();
       logic_assert(FMT::time(m) == nextTime,
 		   to_string("Time contract breached : Invalid message time expected ",
 			     nextTime, " got ", FMT::time(m)));
       nextTime = nextTime + dt;
-      return std::move(m);
+      return m;
     }
 
     const T & nextAt() const
@@ -96,10 +96,9 @@ namespace dsaam
   
     void push(unsigned int flow_index, const M & message)
     {
-      M m = message;
       //std::cout << to_string("[",std::this_thread::get_id(),"] pushing on flow ",flow_index,
       //			     "/",&queues[flow_index], "\n");
-      queues[flow_index]->push(std::move(m));
+      queues[flow_index]->push(message);
     }
 
     void next()

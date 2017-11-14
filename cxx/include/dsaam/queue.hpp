@@ -4,8 +4,9 @@
 
 #include <vector>
 //#include <iostream>
+//#include <thread>
 
-//#include <dsaam/string_utils.hpp>
+//include <dsaam/string_utils.hpp>
 #include <dsaam/semaphore.hpp>
 
 namespace dsaam
@@ -25,24 +26,24 @@ namespace dsaam
     ~Queue() {}
  
 
-    void push(M &&e)
+    void push(const M &e)
     {
       n_free_to_push.decrease();//blocking
       //std::cout << to_string("[",std::this_thread::get_id(),"] Queue::push(",this,") idx=",tail,"\n");
-      buffer[tail] = std::forward<M>(e);
+      buffer[tail] = e;
       tail = (tail + 1) % max_size;
       n_full_to_pop.increase();
     }
 
-    M&& pop()
+    M pop()
     {
       n_full_to_pop.decrease();//blocking
       //std::cout << to_string("[",std::this_thread::get_id(),"] Queue::pop(",this,") idx=",head,"\n");
 
-      M && e = std::move(buffer[head]);
+      M e = std::move(buffer[head]);
       head = (head + 1) % max_size;
       n_free_to_push.increase();
-      return std::move(e);
+      return e;
     }
   private:
     unsigned int max_size;
