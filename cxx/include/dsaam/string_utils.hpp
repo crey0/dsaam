@@ -25,17 +25,11 @@ namespace dsaam
     ss << object;
     return ss.str();
   }
-  
-  template<class... Args>
-  inline string to_string(string s, Args... args)
-  {
-    return s + to_string(args...);
-  }
 
-  template<class T, class... Args>
-  inline string to_string(T v, Args... args)
+  template<class T, class U, class... Args>
+  inline string to_string(T v, U v2, Args... args)
   {
-    return to_string(v) + to_string(args...);
+    return dsaam::to_string(v) + dsaam::to_string(v2, args...);
   }
 
 }
