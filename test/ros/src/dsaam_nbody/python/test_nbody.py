@@ -165,22 +165,22 @@ def create_launch_file(path, autotest=True):
                 'color': c
             }
             outflows = [{
-                'from': i,
+                'from': i+"/"+i,
                 'name': i + "/" + mt[0],
                 'message_class': mt[1],
                 'dt': dt[c].to_nanos(),
-                'sinks': [j for color in idx for j in idx[color]
+                'sinks': [j+"/"+j for color in idx for j in idx[color]
                           if c in effectors[color] and not j == i],
             } for mt in m_types ]
             inflows = [{
-                'from': j,
+                'from': j+"/"+j,
                 'name': j + "/" + mt[0],
                 'message_class': mt[1],
                 'dt': dt[color].to_nanos(),
                 } for color in effectors[c] for j in idx[color] for mt in m_types
                        if not j == i ]
             node_params= {
-                'name': i,
+                'name': i+"/"+i,
                 'max_qsize': max_qsize,
                 'start_time': start_time.to_nanos(),
                 'dt': dt[c].to_nanos(),
@@ -200,13 +200,13 @@ def create_launch_file(path, autotest=True):
     i = 'drawer_0'
     outflows = []
     inflows = [{
-        'from': j,
+        'from': j+"/"+j,
         'name': j + "/" + mt[0],
         'message_class': mt[1],
         'dt': dt[color].to_nanos(),
     } for color in effectors[c] for j in idx[color] for mt in m_types] 
     node_params= {
-        'name': i,
+        'name': i+"/"+i,
         'max_qsize': max_qsize,
         'start_time': start_time.to_nanos(),
         'dt': dt[c].to_nanos(),
@@ -218,6 +218,7 @@ def create_launch_file(path, autotest=True):
     yamlp = conf_path + "{}.yaml".format(i)
     create_yaml(yamlp, node_params)
     launch.node(i, i, runfile_py, yamlp, "dsaam_nbody")
+
     launch.write(conf_path + "test_nbody.launch")
 
     # Set ros package path to add the dsaam python root folder 

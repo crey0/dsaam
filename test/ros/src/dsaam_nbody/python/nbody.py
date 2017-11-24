@@ -46,7 +46,8 @@ def shutdown_hook():
 def make_ros_nbody_node():
     global autotest, stop_time
     
-    name = rospy.get_param("name")
+    name_global = rospy.get_param("name")
+    name = name_global.split("/")[-1]
     print('[{}] Building node'.format(name))
     autotest = rospy.get_param('/autotest')
     if autotest:
@@ -55,13 +56,13 @@ def make_ros_nbody_node():
     ifs = rospy.get_param('inflows')
     bodies = {}
     for i in ifs:
-        i_name = i['from']
+        i_name = i['from'].split("/")[-1]
         i_p = rospy.get_param('/' + i_name + '/body')
         bodies[i_name] = Body(i_name,
                               i_p['position'], i_p['speed'], i_p['mass'], i_p['radius'],
                               i_p['color'])
 
-    ros_node = make_rosnode_from_params(name)
+    ros_node = make_rosnode_from_params(name_global)
     if name.startswith('drawer'):
         system = System(bodies)
         size = rospy.get_param('size')

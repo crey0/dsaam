@@ -108,8 +108,10 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "not_good");
   std::vector<Body> bodies;
 
-  string name;
-  assert(ros::param::get("name", name));
+  string name_global;
+  assert(ros::param::get("name", name_global));
+  auto pos = name_global.rfind("/");
+  string name = name_global.substr(pos+1);
   std::cout << "[" << name << "] Building node" << std::endl;
 
 
@@ -158,6 +160,7 @@ int main(int argc, char **argv)
     {
       auto pt = ptree[i];
       string b_name = string(pt["from"]);
+      b_name = b_name.substr(b_name.rfind("/"));
       XmlRpc::XmlRpcValue bodyp;
       assert(ros::param::get("/"+b_name+"/body", bodyp));
       add_body(b_name, bodyp);
@@ -177,18 +180,21 @@ int main(int argc, char **argv)
     {
       auto pt = ptree[i];
       string i_name = "/" + string(pt["name"]);
+      string n_name = string(pt["from"]);
       time_type i_dt = from_nanos(int(pt["dt"]));
       const string &in_body_name = get_body(i_name);
       
       string type = pt["message_class"];
       if(type == "geometry_msgs.msg.PointStamped")
 	{
-	  node.setup_subscriber<geometry_msgs::PointStamped>(i_name, name, t, i_dt,
+	  node.setup_subscriber<geometry_msgs::PointStamped>(n_name, i_name, name_global,
+							     t, i_dt,
 				node.pCallback(in_body_name));
 	}
       else if(type == "geometry_msgs.msg.QuaternionStamped")
 	{
-	  node.setup_subscriber<geometry_msgs::QuaternionStamped>(i_name, name, t, i_dt,
+	  node.setup_subscriber<geometry_msgs::QuaternionStamped>(n_name, i_name, name_global,
+								  t, i_dt,
 				node.vCallback(in_body_name));
 	} 
       else

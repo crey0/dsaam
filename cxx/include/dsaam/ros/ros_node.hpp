@@ -226,7 +226,7 @@ namespace dsaam { namespace ros
 
     template<class S>
     typename std::enable_if<::ros::message_traits::HasHeader<S>::value>::type
-    setup_subscriber(const string & ifname, const string & name,
+    setup_subscriber(const string & node_name, const string & ifname, const string & name,
 		     const time_type& time, const time_type& dt, 
 		     const dsaam::message_callback_type<shared_cptr_t<S>,
 		     time_type, function_type> &m_cb,
@@ -236,7 +236,7 @@ namespace dsaam { namespace ros
       //Setup callback for delivering messages
       auto message_cwrapper = std::bind(&_dispatch_callback<S>, m_cb,
 					std::placeholders::_1, std::placeholders::_2);
-      auto time_callback = _ros_out_time_callback(ifname, name, max_qsize);
+      auto time_callback = _ros_out_time_callback(node_name, ifname, name, max_qsize);
       //create inflow
       auto flow = InFlow(ifname, time, dt, max_qsize, message_cwrapper, time_callback);
       setup_inflow(std::move(flow));
@@ -298,11 +298,12 @@ namespace dsaam { namespace ros
     
   private:
 
-    boost::function<void(const time_type&)> _ros_out_time_callback(const string &ifname,
+    boost::function<void(const time_type&)> _ros_out_time_callback(const string &node_name,
+								   const string &ifname,
 								   const string &name,
 								   size_t max_qsize)
     {
-      auto subcount = std::unique_ptr<CountSubListener>(new CountSubListener(1));
+      auto subcount = std::unique_ptr<CountSubListener>(new CountSubListener({node_name}));
       ::ros::SubscriberStatusCallback connect_cb = subcount->peer_subscribe_callback();
       pubs.push_back(n.advertise<time_message_type>(ifname + "/time/" + name, max_qsize,
 						    connect_cb));

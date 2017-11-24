@@ -4,7 +4,6 @@ from threading import Lock, Semaphore
 
 class OutMessageFlow:
     def __init__(self, name, time, dt, sinks, qsize):
-        print("OutMessageFlow "+ name + " qsize={}".format(qsize))
         self.name = name
         self.time = time-dt
         self.dt = copy(dt)
