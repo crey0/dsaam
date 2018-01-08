@@ -109,6 +109,8 @@ protected:
 
 int main()
 {
+  std::cout << "Constructing nodes\n";
+  
   string colors[] = {"red", "green", "blue", "yellow"};
 
   unsigned int n = 4;
@@ -160,7 +162,7 @@ int main()
       //				       {b.name + "/speed", start_time, dts[i], sinks}};
       nodes.emplace_back(all_bodies,
 			 names[i], start_time, dts[i],
-			 max_qsize, dsaam::Time(10000));
+			 max_qsize, dsaam::Time(100000));
       auto bp = names[i] + "/position";
       auto bs = names[i] + "/speed";
       nodes.back().setup_outflow({bp, start_time, dts[i]});
@@ -199,11 +201,26 @@ int main()
       
     }
 
+
+   
   //start Nodes
+  std::cout << "Starting nodes\n";
+  auto start = std::chrono::steady_clock::now();
   for(auto &n : nodes) n.start();
 
   //wait for Nodes to stop
   for(auto &n : nodes) n.join();
+  auto end = std::chrono::steady_clock::now();
+  auto diff = end - start;
+  std::cout << "Joined all nodes in "
+	    << std::chrono::duration <double, std::milli> (diff).count() << " ms\n";
+  std::cout << "Final state: \n";
+  for(auto &n : nodes)
+    {
+      auto b = n.state_self();
+      std::cout << dsaam::to_string("[",n.time(),"]"," [",n.name,"] p=(",b.p[0],", ",b.p[1],")",
+				    " v=(",b.v[0],", ",b.v[1],")","\n");
+    }
 
   //stop
   return 0;

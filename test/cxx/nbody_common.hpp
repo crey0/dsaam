@@ -169,6 +169,11 @@ public:
     if(stop_time > time_type() && to + this->dt > stop_time) this->stop();
 
   }
+
+  const Body& state_self()
+  {
+    return system.self();
+  }
  
 protected:
   virtual void send_state(const time_type &t) = 0;
