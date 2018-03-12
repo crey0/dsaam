@@ -33,8 +33,7 @@ class Node:
     #TODO cleanup this mess
     def init(self):
          if len(self.inflows.flows) == 0:
-            self.next = lambda: (None, (None, self.time, self.dt),
-                                 self.time + self.dt)
+            self.next = lambda: self.time + self.dt
             self.inflows.next_time = lambda: self.time + self.dt
         
     def setup_inflow(self, flow):
