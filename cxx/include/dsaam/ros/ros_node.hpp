@@ -5,7 +5,7 @@
 //Horrible hack. Maybe introduce a time and a duration type in DSAAM (seems standard)?
 namespace ros
 {
-  Time operator+(const Time& t1, const Time& t2)
+  inline Time operator+(const Time& t1, const Time& t2)
   {
     return t1 + ros::Duration(t2.sec, t2.nsec);
   }
