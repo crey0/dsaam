@@ -25,8 +25,9 @@ namespace dsaam
     
   public:
     OutMessageFlow(string name, T start_time, T dt, std::vector<Sink>& sinks,
-		   size_t max_qsize, const send_callback_type<M,F> &cb)
-      :  OutFlow<M, T, F>(name, start_time, dt, sinks, max_qsize, cb),
+		   size_t max_qsize, const send_callback_type<M,F> &cb,
+		   FlowType ftype)
+      :  OutFlow<M, T, F>(name, start_time, dt, sinks, max_qsize, cb, ftype),
 	 heap(), heap_handles()
     {
       for(size_t i = 0; i < this->sinks.size(); i++)
@@ -52,7 +53,7 @@ namespace dsaam
         typename heap_type::handle_type & h = heap_handles[subscriber];
 	assert(h->value.v > 0);
 	h->value.v -= 1;
-	heap.decrease(h);
+	heap.siftdown(h);
 	top = heap.top().v;
       }
       if (top < this->qsize)

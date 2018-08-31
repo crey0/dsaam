@@ -59,6 +59,10 @@ namespace dsaam
     string name;
   };
 
+
+  enum class FlowType { PRED, OBS, _SIZE };
+
+
   template<class M, class T, template <class> class F, class S = Sink>
   struct OutFlow
   {
@@ -66,8 +70,10 @@ namespace dsaam
     OutFlow(string name, const T& time, const T& dt,
 	    const std::vector<S>& sinks = {}, size_t qsize = 0,
 	    const send_callback_type<M,F> &send =
-	    empty<send_callback_type<M,F>>::value())
-      : name(name), time(time), dt(dt), qsize(qsize), send(send), sinks(sinks){}
+	    empty<send_callback_type<M,F>>::value(),
+	    FlowType ftype = FlowType::PRED)
+      : name(name), time(time), dt(dt), qsize(qsize), send(send), sinks(sinks),
+	ftype(ftype) {}
 
     void setup_sink(S &&sink)
     {
@@ -80,6 +86,7 @@ namespace dsaam
     size_t qsize;
     send_callback_type<M, F> send;
     std::vector<S> sinks;
+    FlowType ftype;
   };
 
 }

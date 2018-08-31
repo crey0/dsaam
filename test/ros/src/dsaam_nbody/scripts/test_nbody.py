@@ -1,4 +1,4 @@
-#/bin/python3
+#!/usr/bin/env python3
 import yaml
 from dsaam.node import Time
 import numpy as np

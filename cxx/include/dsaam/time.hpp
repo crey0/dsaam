@@ -1,6 +1,7 @@
 #ifndef DSAAM_TIME_HPP
 #define DSAAM_TIME_HPP
 #include <ostream>
+#include <limits>
 
 namespace dsaam
 {
@@ -82,7 +83,73 @@ namespace dsaam
   {
     return os << right.sec << ":" << right.nanos;
   }
+
+  template<class T>
+  struct TimeWithInf
+  {
+    TimeWithInf() : time() {}
+    TimeWithInf(const T & time) : time(time) {} 
+    static TimeWithInf inf(){ auto ret = TimeWithInf(true); ret._inf = true; return ret; }
+    bool isinf() const { return _inf; };
+    
+    T time;
+  private:
+    bool _inf = false;
+  };
+
+
+  template<class T>
+  inline bool operator <(const T &left, const TimeWithInf<T> &right)
+  {
+    return right.isinf() || left < right.time;
+  }
+  template<class T>
+  inline bool operator>(const T &left, const TimeWithInf<T> &right){ return right < left; }
+  template<class T>
+  inline bool operator<=(const T &left, const TimeWithInf<T> &right){ return !(left > right); }
+  template<class T>
+  inline bool operator>=(const T &left, const TimeWithInf<T> &right){ return !(left > right); }
+  template<class T>
+
+  inline bool operator==(const T &left, const TimeWithInf<T> &right)
+  {
+    return !right.isinf() && left == right.time;
+  }
+
+  template<class T>
+  inline bool operator!=(const Time &left, const TimeWithInf<T> &right)
+  {
+    return !(left == right);
+  }
+
+
+  template<class T>
+  inline bool operator <(const TimeWithInf<T> &left, const T &right) { return !(right >= left);}
+  template<class T>
+  inline bool operator >(const TimeWithInf<T> &left, const T &right) { return !(right <= left);}
+  template<class T>
+  inline bool operator <=(const TimeWithInf<T> &left, const T &right) { return !(right > left);}
+  template<class T>
+  inline bool operator >=(const TimeWithInf<T> &left, const T &right) { return !(right > left);}
+  template<class T>
+  inline bool operator ==(const TimeWithInf<T> &left, const T &right) { return right == left;}
+  template<class T>
+  inline bool operator !=(const TimeWithInf<T> &left, const T &right) { return right != left;}
+  template<class T>
   
+  inline std::ostream& operator<<(std::ostream& os, const TimeWithInf<T>& right)
+  {
+    if (right.isinf())
+      return os << "inf:inf";
+    else
+      return os << right.time;
+  }
+
+  template<class T, class T1>
+  inline void min_assign(T & t, const T1& t1)
+  {
+    if(t1 < t) t = t1;
+  }
 }
 
 #endif //DSAAM_TIME_HPP

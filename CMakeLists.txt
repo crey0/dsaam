@@ -13,22 +13,34 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
 
 
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wpedantic -Werror")
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Werror")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wpedantic")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
 
 
 MESSAGE(STATUS "Build type:" ${CMAKE_BUILD_TYPE})
 
 INCLUDE_DIRECTORIES(cxx/include)
 
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
-
-add_executable(nbody_threads test/cxx/nbody_threads.cpp)
-target_link_libraries(nbody_threads Threads::Threads)
 
 install(DIRECTORY cxx/ DESTINATION ${CMAKE_INSTALL_PREFIX}
   USE_SOURCE_PERMISSIONS
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
 
-#add_subdirectory(test/ros/src)
+IF(BUILD_TEST)
+  set(THREADS_PREFER_PTHREAD_FLAG ON)
+  find_package(Threads REQUIRED)
+
+  add_executable(nbody_threads EXCLUDE_FROM_ALL test/cxx/nbody_threads.cpp)
+  target_link_libraries(nbody_threads Threads::Threads)
+
+  add_custom_target(build_tests DEPENDS nbody_threads)
+ENDIF()
+
+IF(BUILD_TEST AND BUILD_ROS)
+  add_custom_target(nbody_ros
+    COMMAND catkin_make -C ${dsaam_SOURCE_DIR}/test/ros --build ${CMAKE_BINARY_DIR}/ros/build --cmake-args -DCATKIN_DEVEL_PREFIX=${CMAKE_BINARY_DIR}/ros/devel -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/ros/install
+    WORKING_DIRECTORY ${dsaam_SOURCE_DIR}/test/ros
+    )
+
+  add_dependencies(build_tests nbody_ros)
+ENDIF()

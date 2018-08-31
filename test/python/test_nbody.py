@@ -1,4 +1,4 @@
-from dsaam.node import Node, InFlow, OutFlow, Sink, Time
+from dsaam.node import Node, InFlow, OutFlow, Sink, Time, FlowType
 from dsaam.onethreadnode import OneThreadNode
 
 import numpy as np
@@ -153,13 +153,15 @@ class SystemOneNode(OneThreadNode):
 
     @exception_collect
     def process(self, name, m, tmin_next):
+        #print("[{}] [{}] Process {} next at {}"\
+        #      .format(self.time, self.name, name, tmin_next))
         idx = name
         state, time, dt = m
         if idx is not None:
             self.systemone.updateState(idx, state)
         
         newTime = self.time
-        while tmin_next >= newTime + self.dt:
+        while (tmin_next >= newTime + self.dt):
             #print("[{}] [{}] Computing next step {} -- > {}"\
             #      .format(self.time, self.name, newTime, newTime+self.dt))
             dt_secf = float(self.dt.sec) + float(self.dt.nanos)*1e-9
@@ -329,7 +331,8 @@ def test_nbody(auto=True):
             node.setup_outflow(OutFlow(node.name, time,
                                        dt_colors[node_color],
                                        0, # qsize
-                                       sinks))
+                                       sinks,
+                                       FlowType.PRED))
         else:
             node_color = 'drawer'
 

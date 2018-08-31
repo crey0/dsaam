@@ -254,7 +254,8 @@ namespace dsaam { namespace ros
     setup_publisher(const string &ofname,
 		    const time_type &time, const time_type& dt,
 		    std::vector<string> subscribers,
-		    size_t max_qsize = 0)
+		    size_t max_qsize = 0,
+		    FlowType ftype = FlowType::PRED)
     {      
       auto subcount = std::unique_ptr<CountSubListener>(new CountSubListener(subscribers));
       ::ros::SubscriberStatusCallback connect_cb = subcount->peer_subscribe_callback();
@@ -266,7 +267,7 @@ namespace dsaam { namespace ros
       //create ouflow and setup sinks
       send_callback_type cb = std::bind(&ROSMessagePointerHolder::publish<S>,
 					std::ref(pubs.back()), std::placeholders::_1);
-      OutFlow flow {ofname, time, dt, sinks, max_qsize, cb};
+      OutFlow flow {ofname, time, dt, sinks, max_qsize, cb, ftype};
       setup_outflow(std::move(flow));
     }
 

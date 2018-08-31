@@ -8,6 +8,7 @@
 #include<dsaam/common.hpp>
 #include<dsaam/inflows.hpp>
 #include<dsaam/outflows.hpp>
+#include<dsaam/time.hpp>
 #include<deque>
 
 namespace dsaam
@@ -30,20 +31,39 @@ namespace dsaam
     using OutFlow = typename transport_type::OutFlow;
     using Sink = typename transport_type::Sink;
 
+
+    struct greater_outflow
+    {
+      bool operator()(const OutFlow & left, const OutFlow& right)
+      {
+	return left.time > right.time
+	  || (left.time == right.time
+	      && left.ftype == FlowType::OBS && right.ftype == FlowType::PRED);
+      };
+    };
+
+    using OutFlowHandle = typename binary_heap<OutFlow, greater_outflow>::handle_type;
+
+
     Node(const string &name, const time_type &time, size_t default_qsize = 0) :
       name(name), _time(time), default_qsize(default_qsize),
-      inflows(time, default_qsize), outflows()
-    {}
+      inflows(time, default_qsize), outflows() {}
     
     void next()
     {
+      logic_assert(outflows.size() == 0 ||
+		   ((nextOut().ftype == FlowType::OBS && nextAt() <= nextOut().time)
+		    || (nextOut().ftype == FlowType::PRED && nextAt() < nextOut().time)),
+		   to_string("Time contract breached: attempting to consume next message at ",
+			     nextAt()," but next outgoing message should be sent before at ",
+			     nextOut().time, " on flow ", nextOut().name));
       this->inflows.next();
     }
 
     send_callback_type send_callback(unsigned int flow)
     {
       using std::placeholders::_1;
-      return std::bind(&Node::_send, this, &outflows[flow], _1);
+      return std::bind(&Node::_send, this, outflows[flow], _1);
     }
     
     send_callback_type send_callback(const string & flow)
@@ -67,6 +87,11 @@ namespace dsaam
     {
       return inflows.nextTime();
     }
+
+    const OutFlow & nextOut() const
+    {
+      return next_out.top();
+    }
     
     virtual void setup_inflow(InFlow&& flow) override
     {
@@ -77,14 +102,14 @@ namespace dsaam
     virtual void setup_outflow(OutFlow&& flow) override 
     {
       flow.qsize = flow.qsize > 0 ? flow.qsize : default_qsize;
-      outflows.emplace_back(std::move(flow));
-      transport_type::setup_outflow(outflows.back());
- 
+      auto h = next_out.push(std::move(flow));
+      outflows.push_back(h);
+      transport_type::setup_outflow(h->value);
     }
 
     virtual void setup_sink(const string &outflow, Sink && sink) override
     {
-      OutFlow & flow = outflows.at(_out_flow_index(outflow));
+      OutFlow & flow = outflows.at(_out_flow_index(outflow))->value;
       flow.setup_sink(std::move(sink));
       transport_type::setup_sink(outflow, flow.sinks.back());
     }
@@ -105,29 +130,34 @@ namespace dsaam
     
   private:
 
-    void _send(OutFlow * outflow, const message_cptr & m)
+    void _send(OutFlowHandle handle, const message_cptr & m)
     {
+      auto & outflow = handle->value; 
       logic_assert(transport_type::time(m) >= time(),
 		   to_string("Time contract breached : sending message with time ",
 			     transport_type::time(m),
 			     " in the future  (current time is ", time()));
-      logic_assert(transport_type::time(m) <= inflows.nextTime(),
+      logic_assert(transport_type::time(m) == outflow.time,
+		   to_string("Time contract breached : Invalid message time expected ",
+			     outflow.time, " got ", transport_type::time(m)));
+      logic_assert(inflows.size() == 0
+		   || ((outflow.ftype == FlowType::PRED && transport_type::time(m) <= nextAt())
+		       || (outflow.ftype == FlowType::OBS && transport_type::time(m) < nextAt())),
 		   to_string("Time contract breached: sending message at ",
 			     transport_type::time(m), " before arrival of next message at ",
 			     inflows.nextTime()));
-      logic_assert(transport_type::time(m) == outflow->time,
-		   to_string("Time contract breached : Invalid message time expected ",
-			     outflow->time, " got ", transport_type::time(m)));
-      outflow->time = outflow->time + outflow->dt;
       
-      outflow->send(m);
+      outflow.time = outflow.time + outflow.dt;     
+      outflow.send(m);
+      next_out.update(handle);
+      
     }
       
     unsigned int _out_flow_index(const string & name) const
     {
       for(unsigned int i=0; i<outflows.size(); i++)
 	{
-	  if(outflows[i].name == name) return i;
+	  if(outflows[i]->value.name == name) return i;
 	}
       throw  std::domain_error("No outflow "+name+" defined on this node ("+this->name+")");
     }
@@ -135,7 +165,7 @@ namespace dsaam
     unsigned int _out_flow_sink_index(unsigned int flow, const string & name) const
     {
       unsigned int i = 0;
-      for(auto &s : outflows[flow].sinks)
+      for(auto &s : outflows[flow]->value.sinks)
 	{
 	  if (s.name == name) return i;
 	  i++;
@@ -154,7 +184,9 @@ namespace dsaam
     time_type _time;
     size_t default_qsize;
     MessageFlowMultiplexer<message_cptr, time_type, transport_type, InFlow> inflows;
-    std::deque<OutFlow> outflows;  
+    std::vector<OutFlowHandle> outflows;
+    binary_heap<OutFlow, greater_outflow> next_out;
+    
   };
 
 

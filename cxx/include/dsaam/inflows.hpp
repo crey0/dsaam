@@ -67,6 +67,11 @@ namespace dsaam
       inflows(), time(time), default_qsize(default_qsize), heap(), queues()
     {}
 
+    size_t size()
+    {
+      return queues.size();
+    }
+    
     void setup_inflow(InFlow&& flow)
     {
       auto p = std::unique_ptr<MessageQueue<M, T, FMT>>(
@@ -106,7 +111,7 @@ namespace dsaam
       heap_data & q = const_cast<heap_data &>(heap.top());
       //std::cout << to_string("[",std::this_thread::get_id(),"] [",time,"] popping on queue ",q.flow.name,"\n");
       auto m = q.queue.pop();
-      heap.decrease(q.handle);
+      heap.siftdown(q.handle);
       q.flow.time_callback(FMT::time(m));
       q.flow.callback(std::move(m), nextTime());
     }

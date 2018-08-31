@@ -23,13 +23,10 @@ class MessageQueue:
         self.qsem.acquire()
         with self.qlock:
             m, time = self.queue.pop(0)
-            self.time = copy(time)
+            assert time  == self.time, "Time contract breached in : Invalid message"\
+                "in queue {}, time expected {} got {} ".format(self.name, self.time, time)
+            self.time += self.dt
             return m, time, self.dt
 
     def nextTime(self):
-        with self.qlock:
-            return self.time + self.dt
-    
-    def lastTime(self):
-        with self.qlock:
-            return self.time, self.dt
+        return self.time

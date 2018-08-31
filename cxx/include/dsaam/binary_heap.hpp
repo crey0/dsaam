@@ -2,6 +2,8 @@
 #define DSAAM_BINARY_HEAP_HPP
 #include<vector>
 #include<list>
+#include<cstddef>
+#include<functional>
 
 namespace dsaam
 {
@@ -14,6 +16,7 @@ namespace dsaam
     typedef struct node_type
     {
       node_type(size_t index, const T &value) : index(index), value(value) {}
+      node_type(size_t index, T &&value) : index(index), value(std::move(value)) {}
       size_t index;
       typename std::list<struct node_type>::const_iterator it_erase;
       T value;
@@ -27,11 +30,13 @@ namespace dsaam
     handle_type push(const T& v)
     {
       heap_data_.emplace_front(heap_.size(), v);
-      handle_type h = &heap_data_.front();
-      heap_.emplace_back(h);
-      h->it_erase = heap_data_.begin();
-      size_ = heap_.size();
-      return h;
+      return _update_after_push();
+    }
+
+    handle_type push(T&& v)
+    {
+      heap_data_.emplace_front(heap_.size(), std::move(v));
+      return _update_after_push();
     }
 
     void pop()
@@ -40,7 +45,7 @@ namespace dsaam
       auto hb = heap_.back();
       swap_nodes(hf, hb);
       heap_.pop_back();
-      decrease(hb);
+      siftdown(hb);
       heap_data_.erase(hf->it_erase);
     }
       
@@ -99,15 +104,15 @@ namespace dsaam
     {
       if(h->index != 0 && compare(father(h)->value, h->value))
 	{
-	  increase(h);
+	  siftup(h);
 	}
       else
 	{
-	  decrease(h);
+	  siftdown(h);
 	}
     }
 
-    void increase(handle_type h)
+    void siftup(handle_type h)
     {
       while(h->index != 0 && compare(father(h)->value, h->value))
 	{
@@ -115,7 +120,7 @@ namespace dsaam
 	}
     }
 
-    void decrease(handle_type h)
+    void siftdown(handle_type h)
     {
       auto c = best_child(h);
       while(c && compare(h->value, c->value))
@@ -125,6 +130,17 @@ namespace dsaam
 	}
     }
     
+  private:
+    handle_type _update_after_push()
+    {
+      handle_type h = &heap_data_.front();
+      heap_.emplace_back(h);
+      h->it_erase = heap_data_.begin();
+      size_ = heap_.size();
+      siftup(h);
+      return h;
+    }
+
   private:
     C compare;
     std::list<node_type> heap_data_;

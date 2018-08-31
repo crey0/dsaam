@@ -17,6 +17,13 @@ double to_double(const ros::Duration &t)
 #include<geometry_msgs/PointStamped.h>
 #include <XmlRpcValue.h>
 
+
+#ifdef logic_assert
+#undef logic_assert
+#endif
+
+#define logic_assert(test) if(!(test)) throw std::logic_error("Assertion failed: " #test)
+
 using pm_type = geometry_msgs::PointStamped;
 using vm_type = geometry_msgs::QuaternionStamped;
 
@@ -105,26 +112,28 @@ time_type from_string(const string &nanos_s)
 
 int main(int argc, char **argv)  
 {
-  ros::init(argc, argv, "not_good");
+  
+  ros::init(argc, argv, "__remapped__");
+  
   std::vector<Body> bodies;
 
   string name_global;
-  assert(ros::param::get("name", name_global));
+  logic_assert(ros::param::get("name", name_global));
   auto pos = name_global.rfind("/");
   string name = name_global.substr(pos+1);
   std::cout << "[" << name << "] Building node" << std::endl;
 
 
-  int param_int;
-  assert(ros::param::get("start_time", param_int));
+  int param_int = -1;
+  logic_assert(ros::param::get("start_time", param_int));
   time_type t = from_nanos(param_int);
-  assert(ros::param::get("dt", param_int));
+  logic_assert(ros::param::get("dt", param_int));
   time_type dt = from_nanos(param_int);
-  assert(ros::param::get("/stop_time", param_int));
+  logic_assert(ros::param::get("/stop_time", param_int));
   time_type stop_time = from_secs(param_int);
-  assert(ros::param::get("max_qsize",param_int));
+  logic_assert(ros::param::get("max_qsize",param_int));
   size_t max_qsize = param_int;
-  assert(max_qsize > 0 );
+  logic_assert(max_qsize > 0 );
   
   XmlRpc::XmlRpcValue ptree;
 
@@ -152,17 +161,17 @@ int main(int argc, char **argv)
 			  string(bodyp["color"]));
     };
   
-  assert(ros::param::get("body", ptree));
+  logic_assert(ros::param::get("body", ptree));
   add_body("/"+name, ptree);
 	   
-  assert(ros::param::get("inflows", ptree));
+  logic_assert(ros::param::get("inflows", ptree));
   for(int i=0; i < ptree.size(); i++)
     {
       auto pt = ptree[i];
       string b_name = string(pt["from"]);
       b_name = b_name.substr(b_name.rfind("/"));
       XmlRpc::XmlRpcValue bodyp;
-      assert(ros::param::get("/"+b_name+"/body", bodyp));
+      logic_assert(ros::param::get("/"+b_name+"/body", bodyp));
       add_body(b_name, bodyp);
      
     }
@@ -204,7 +213,7 @@ int main(int argc, char **argv)
     }
   
   //init pubs
-  assert(ros::param::get("outflows", ptree));
+  logic_assert(ros::param::get("outflows", ptree));
   for(int i=0; i < ptree.size(); i++)
     {
       auto pt = ptree[i];

@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import Sequence
+from enum import Enum
 
 
 class NamedMutableSequence(Sequence):
@@ -8,13 +9,19 @@ class NamedMutableSequence(Sequence):
 
     def __init__(self, *a, **kw):
         slots = self.__slots__
-        for k in slots:
-            setattr(self, k, kw.get(k))
 
+        i=-1
         if a:
-            for k, v in zip(slots, a):
+            for i, (k, v) in enumerate(zip(slots, a)):
                 setattr(self, k, v)
-
+        
+        try:
+            for k in slots[i+1:]:
+                setattr(self, k, kw[k])
+        except KeyError as e:
+            raise KeyError("Missing constructor argument {} in class {}"\
+                           .format(e, self.__class__))
+        
     def __str__(self):
         clsname = self.__class__.__name__
         values = ', '.join('%s=%r' % (k, getattr(self, k))
@@ -36,8 +43,12 @@ def namedlist(name, members):
     if isinstance(members, str):
         members = members.split()
     members = tuple(members)
-    return type(name, (NamedMutableSequence,), {'__slots__': members})  
-        
+    ret = type(name, (NamedMutableSequence,), {'__slots__': members})  
+    ret.__module__ = NamedMutableSequence.__module__
+    return ret
+
 InFlow = namedlist('InFlow', ['name', 'time', 'dt', 'qsize', 'callback', 'time_callback'])
-OutFlow = namedlist('OutFlow', ['name', 'time', 'dt', 'qsize', 'sinks'])
+OutFlow = namedlist('OutFlow', ['name', 'time', 'dt', 'qsize', 'sinks', 'ftype'])
 Sink = namedlist('Sink', ['name', 'callback'])
+
+FlowType = Enum('FlowType', 'PRED OBS')

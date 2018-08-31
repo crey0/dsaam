@@ -1,5 +1,5 @@
 from __future__ import absolute_import, print_function, division
-from ..node import Node, InFlow, OutFlow, Sink, Time
+from ..node import Node, InFlow, OutFlow, Sink, Time, FlowType
 import rospy
 from rospy.topics import SubscribeListener
 from std_msgs.msg import Header
@@ -64,7 +64,7 @@ class RosNode(Node):
         
         
     def setup_publisher(self, flow_name, m_class,
-                        start_time, dt, queue_size = 0, sinks = None):
+                        start_time, dt, queue_size = 0, sinks = None, ftype=FlowType.PRED):
         #if queue_size is zero use default queue size
         queue_size = [queue_size, self.default_qsize] [queue_size <= 0]
         
@@ -86,12 +86,12 @@ class RosNode(Node):
                                  callback=self.ros_out_time_callback(flow_name, s))
 
         #create sinks
-        sinks = [Sink(s) for s in sinks]
+        sinks = [Sink(s, callback=None) for s in sinks]
         if len(sinks) > 0:
             sinks[0].callback = self.ros_send_callback(flow_name)
 
         #setup flow on node
-        outflow = OutFlow(flow_name, start_time, dt, queue_size, sinks)
+        outflow = OutFlow(flow_name, start_time, dt, queue_size, sinks, ftype)
         self.setup_outflow(outflow)
 
 
