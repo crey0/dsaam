@@ -32,8 +32,11 @@ IF(BUILD_TEST)
 
   add_executable(nbody_threads EXCLUDE_FROM_ALL test/cxx/nbody_threads.cpp)
   target_link_libraries(nbody_threads Threads::Threads)
-
-  add_custom_target(build_tests DEPENDS nbody_threads)
+  set(TEST_DEPENDS_ALL_FLAG "")
+  IF(BUILD_TEST_ALWAYS)
+    set(TEST_DEPENDS_ALL_FLAG "ALL")
+  ENDIF()
+  add_custom_target(build_tests ${TEST_DEPENDS_ALL_FLAG} DEPENDS nbody_threads)
 ENDIF()
 
 IF(BUILD_TEST AND BUILD_ROS)
@@ -43,4 +46,7 @@ IF(BUILD_TEST AND BUILD_ROS)
     )
 
   add_dependencies(build_tests nbody_ros)
+  set_directory_properties(PROPERTIES  ADDITIONAL_MAKE_CLEAN_FILES ros)
 ENDIF()
+
+
