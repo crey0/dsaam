@@ -248,6 +248,11 @@ int main(int argc, char **argv)
   //start node
   std::cout << "[" << node.name << "] Starting node" << std::endl;
   node.start();
+  if( stop_time > time_type() )
+    {
+	  node.join();
+	  ros::shutdown();
+    }
   ros::waitForShutdown();
   std::cout << "[" << node.name << "] Node stopped" << std::endl;
 
