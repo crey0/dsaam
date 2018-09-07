@@ -197,27 +197,28 @@ def create_launch_file(path, autotest=True):
 
     
     c = 'drawer'
-    i = 'drawer_0'
-    outflows = []
-    inflows = [{
-        'from': j+"/"+j,
-        'name': j + "/" + mt[0],
-        'message_class': mt[1],
-        'dt': dt[color].to_nanos(),
-    } for color in effectors[c] for j in idx[color] for mt in m_types] 
-    node_params= {
-        'name': i+"/"+i,
-        'max_qsize': max_qsize,
-        'start_time': start_time.to_nanos(),
-        'dt': dt[c].to_nanos(),
-        'outflows': outflows,
-        'inflows': inflows,
-        'size': draw_size,
-        'scale': draw_scale,
-    }
-    yamlp = conf_path + "{}.yaml".format(i)
-    create_yaml(yamlp, node_params)
-    launch.node(i, i, runfile_py, yamlp, "dsaam_nbody")
+    for num, i in enumerate(idx[c]):
+        outflows = []
+        inflows = [{
+            'from': j+"/"+j,
+            'name': j + "/" + mt[0],
+            'message_class': mt[1],
+            'dt': dt[color].to_nanos(),
+        } for color in effectors[c] for j in idx[color] for mt in m_types] 
+        node_params= {
+            'name': i+"/"+i,
+            'max_qsize': max_qsize,
+            'start_time': start_time.to_nanos(),
+            'dt': dt[c].to_nanos(),
+            'outflows': outflows,
+            'inflows': inflows,
+            'size': draw_size,
+            'scale': draw_scale,
+        }
+    
+        yamlp = conf_path + "{}.yaml".format(i)
+        create_yaml(yamlp, node_params)
+        launch.node(i, i, runfile_py, yamlp, "dsaam_nbody")
 
     launch.write(conf_path + "test_nbody.launch")
 
@@ -245,4 +246,5 @@ def test_ros_nbody(autotest=True):
         assert code == 0, "One of the processes died with non-zero exit code {}".format(code)
 
 if __name__ == "__main__":
-    test_ros_nbody(autotest=False)
+    autotest = len(sys.argv) > 1 and bool(sys.argv[1])
+    test_ros_nbody(autotest=autotest)

@@ -138,9 +138,9 @@ int main()
   
 
   dsaam::Time start_time(0);
-  dsaam::Time dts[] = {{1}, {2}, {3}, {4}};
+  dsaam::Time dts[] = {{4}, {3}, {2}, {1}};
 
-  unsigned int max_qsize = 10;
+  unsigned int max_qsize = 3;
   
   //construct all bodies
   std::vector<Body> all_bodies;
@@ -193,10 +193,6 @@ int main()
 	    
 	  n.setup_inflow({js, start_time, nj.dt, n.vCallback(j_name)});
 	  nj.setup_sink(js, {js, n});
-	  
-	  //n.set_inflow_callbacks(jp, n.pCallback(j_name), nj.time_callback(jp, n.name));
-	  //n.set_inflow_callbacks(js, n.vCallback(j_name), nj.time_callback(js, n.name));
-
 	}
       
     }

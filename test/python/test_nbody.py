@@ -34,7 +34,10 @@ G = 1.5 * 1.80 * 1e-11
 C = 8 * 1e-3
 eps = 1e-3
 colors = ['red', 'green', 'blue', 'yellow']
-
+colors_display = {'red':'firebrick',
+                  'green':'darkolivegreen',
+                  'blue':'midnightblue',
+                  'yellow':'goldenrod'}
 class Body:
     def __init__(self, name, p0, v0, mass, radius, color):
         self.name = name
@@ -120,7 +123,9 @@ class SystemDrawer:
             self.figure = plt.figure(figsize=self.size)
         self.axes = self.figure.add_axes([0, 0, 1, 1],frameon=True)
         pos, size = self.scatter_data()
-        self.scatter = [self.axes.scatter(pos[c][:, 0], pos[c][:, 1], size[c], color=color) for c, color in enumerate(colors)]
+        self.scatter = [self.axes.scatter(pos[c][:, 0], pos[c][:, 1], size[c],
+                                          color=colors_display[color])
+                        for c, color in enumerate(colors)]
         self.axes.set_xlim(0,1)
         self.axes.set_ylim(0,1)
         #self.axes.grid(True)

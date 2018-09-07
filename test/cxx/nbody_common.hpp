@@ -30,7 +30,8 @@ template<class T>
 Array2d operator*(const T &l , const Array2d &r) { return r * l;}
 
 template<class T>
-Array2d operator%(const Array2d &l, const T &r) { return {{fmod(l[0],r), fmod(l[1],r)}};}
+Array2d operator%(const Array2d &l, const T &r) { return {{fmod(fmod(l[0],r)+r,r),
+							   fmod(fmod(l[1],r)+r, r)}};}
 
 template<class T>
 Array2d pow(const Array2d &l, const T &r) { return {{pow(l[0],r), pow(l[1],r)}};}
