@@ -7,3 +7,4 @@ build/**
 python/*.egg-info
 dist/**
 compile_commands.json
+test/ros/src/CMakeLists.txt
