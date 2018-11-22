@@ -26,6 +26,9 @@ All rights reserved.
  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  POSSIBILITY OF SUCH DAMAGE.
 */
+#ifndef DSAAM_TEST_NBODY_COMMON
+#define DSAAM_TEST_NBODY_COMMON
+
 #include <string>
 #include <vector>
 #include <cmath>
@@ -212,3 +215,5 @@ protected:
   send_callback_type send_p;
   send_callback_type send_v;
 };
+
+#endif // DSAAM_TEST_NBODY_COMMON
